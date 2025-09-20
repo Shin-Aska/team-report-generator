@@ -1,2 +1,157 @@
-# team-report-generator
-A report generator using LLMs
+# Report Generator Server
+
+A Laravel-based team status reporting application. It helps teams capture daily updates, compile weekly summaries, and share consolidated reports quickly. The core web app lives in `reportgen/` and provides:
+
+- Post daily status entries (Markdown) per user and date
+- Post “as another user” from the dashboard (for PMs/team leads)
+- Daily and weekly reports rendered in Bootstrap modals (AJAX)
+- View team status entries by date or by date range
+- Gemini-first LLM summarization pipeline with templated prompts
+- In-app user management (admin-only): add, edit, and remove team members
+- LLM JSON proxy endpoint with CORS and basic rate limiting
+
+## Repository layout
+
+- `reportgen/` — the Laravel 12 application (PHP 8.2)
+- `llm.php` — legacy LLM script (the app now uses `LlmController`, but this file may remain for reference)
+
+## Requirements
+
+- PHP 8.2+
+- Composer 2+
+- MySQL 8+ (or compatible) — configure via `.env`
+- Node.js 18+ and npm (optional, for Vite/dev UX)
+
+Typical PHP extensions for Laravel should be installed (openssl, pdo, mbstring, tokenizer, xml, ctype, json, fileinfo).
+
+## Quick start
+
+1) Clone and enter the app folder
+
+ ```bash
+ git clone <your-repo-url> report-generator-server
+ cd report-generator-server/reportgen
+ ```
+
+2) Install PHP dependencies
+
+ ```bash
+ composer install
+ ```
+
+3) Configure environment
+
+Copy `.env.example` to `.env` (if needed) and set the following:
+
+ ```ini
+ APP_NAME="Report Generator"
+ APP_ENV=local
+ APP_KEY=
+ APP_DEBUG=true
+ APP_URL=http://127.0.0.1:8000
+ 
+ DB_CONNECTION=mysql
+ DB_HOST=127.0.0.1
+ DB_PORT=3306
+ DB_DATABASE=reportgen
+ DB_USERNAME=root
+ DB_PASSWORD=
+ 
+ # LLM configuration
+ GEMINI_API_KEY=your_gemini_key
+ GEMINI_MODEL=gemini-2.5-flash-preview-05-20
+ # Optional fallbacks
+ OPENAI_API_KEY=
+ OPENAI_MODEL=gpt-4o-mini
+ 
+ # CORS allowlist for the /llm proxy (comma-separated; supports wildcards)
+ LLM_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
+ 
+ SESSION_DRIVER=file
+ ```
+
+Then generate the app key:
+
+ ```bash
+ php artisan key:generate
+ ```
+
+4) Run database migrations and seeders
+
+ ```bash
+ php artisan migrate --force
+ php artisan db:seed --force
+ ```
+
+Seeder creates three users (password: `password`):
+- test@example.com (admin)
+- ronald@example.com
+- terrence@example.com
+
+5) (Optional) Frontend build/dev server
+
+ ```bash
+ npm install
+ npm run dev
+ ```
+
+Or you can use the convenience Composer script (requires Node):
+
+ ```bash
+ composer run dev
+ ```
+
+6) Run the app
+
+ ```bash
+ php artisan serve
+ ```
+
+Visit http://127.0.0.1:8000 and log in with a seeded user.
+
+## Key features and endpoints
+
+- Dashboard: `GET /dashboard`
+    - Click date picker to change working date
+    - Click a user avatar to “post as” that user
+    - If a status exists for the selected user/date, it auto-loads into the editor
+    - Admin-only actions: Add, Edit, Remove team members
+
+- Reports
+    - Daily report (modal): `GET /reports/daily?date=YYYY-MM-DD`
+    - Weekly report (modal): `GET /reports/weekly?start=YYYY-MM-DD&end=YYYY-MM-DD`
+
+- Statuses
+    - By date: `GET /statuses?date=YYYY-MM-DD`
+    - By range: `GET /statuses/range?start=YYYY-MM-DD&end=YYYY-MM-DD`
+
+- Entries (AJAX helpers)
+    - Fetch a user’s entry for a date: `GET /entries/fetch?user_id=ID&date=YYYY-MM-DD`
+    - Publish: `POST /entries/publish`
+
+- LLM proxy (CORS-enabled)
+    - `POST /llm` — forwards JSON payload to Gemini using `GEMINI_API_KEY`
+
+## Prompt pipeline
+
+Prompts live at `reportgen/storage/app/prompts/` and contain the placeholder `{concatenated_report_here}`.
+
+- Daily summary: concatenates all entries for the selected date and runs a 2-step pipeline:
+    1) `daily1.md` with `{concatenated_report_here}` replaced
+    2) The result of step 1 is injected as `{concatenated_report_here}` into `daily2.md`
+
+- Weekly summary: concatenates all entries in the date range and applies `weekly.md` with the placeholder replaced.
+
+## Admin role
+
+A new `admin` boolean column is added to `users`. Admins can add/remove/edit other users. Non-admins can edit only their own profile and cannot manage others.
+
+## Troubleshooting
+
+- If you change `.env`, run `php artisan config:clear`.
+- If migrations complain about existing tables, the migrations are guarded, but you can still inspect `database/migrations/` and re-run: `php artisan migrate:fresh --seed` (will wipe data).
+- Ensure your DB credentials are correct and the DB is reachable.
+
+## License
+
+MIT (see repository license if provided).
