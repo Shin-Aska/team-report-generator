@@ -13,11 +13,13 @@
           @csrf
           <div class="mb-3">
             <label class="form-label">Email</label>
-            <input type="email" name="email" class="form-control" value="{{ old('email', 'test@example.com') }}" required>
+            <input type="email" name="email" class="form-control" value="{{ old('email') }}" required>
+            <div class="form-text">Enter your email address</div>
           </div>
           <div class="mb-3">
             <label class="form-label">Password</label>
-            <input type="password" name="password" class="form-control" value="password" required>
+            <input type="password" name="password" class="form-control" required>
+            <div class="form-text">Enter your password</div>
           </div>
           <div class="d-grid">
             <button class="btn btn-primary">Login</button>
