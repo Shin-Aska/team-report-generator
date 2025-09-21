@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? 'Report Generator' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ asset('css/bootstrap-sketch-theme.css') }}" rel="stylesheet">
     <style>
-        body { background-color: #f5f7fb; }
+        body { background: var(--bs-body-bg, #f5f7fb); }
         .page-card { background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.06); border-radius: 12px; }
-        .toolbar { background: #0d6efd; color: #fff; }
-        .avatar { width: 64px; height: 64px; border-radius: 50%; background: #e7f1ff; display: inline-flex; align-items:center; justify-content:center; font-weight:600; color:#0d6efd; }
+        .toolbar { background: var(--bs-primary, #0d6efd); color: #fff; }
+        .avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--bs-primary-bg-subtle, #e7f1ff); display: inline-flex; align-items:center; justify-content:center; font-weight:600; color: var(--bs-primary, #0d6efd); }
         .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 { margin-top:1.25rem; }
         .markdown-preview ul { padding-left: 1.4rem; }
         .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
