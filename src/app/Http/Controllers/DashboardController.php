@@ -197,9 +197,8 @@ class DashboardController extends Controller
             ->orderBy(User::select('name')->whereColumn('users.id','entries.user_id'))
             ->get();
 
-        $html = view('statuses.date', compact('entries','date'))->render();
-
         if ($request->ajax() || $request->wantsJson()) {
+            $html = view('statuses.partials.date', compact('entries','date'))->render();
             return response()->json([
                 'title' => 'Statuses',
                 'date' => $date,
@@ -222,13 +221,12 @@ class DashboardController extends Controller
             ->get()
             ->groupBy(fn($e) => $e->entry_date->toDateString());
 
-        $html = view('statuses.range', [
-            'grouped' => $entries,
-            'start' => $start,
-            'end' => $end,
-        ])->render();
-
         if ($request->ajax() || $request->wantsJson()) {
+            $html = view('statuses.partials.range', [
+                'grouped' => $entries,
+                'start' => $start,
+                'end' => $end,
+            ])->render();
             return response()->json([
                 'title' => 'Statuses',
                 'start' => $start->toDateString(),

@@ -1,6 +1,10 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+  .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
+  .loading-overlay.d-none { display: none !important; }
+</style>
 <div class="row g-4">
   <div class="col-12">
     <div class="page-card p-4">
@@ -16,7 +20,10 @@
         @csrf
         <input type="hidden" name="entry_date" value="{{ $date }}"/>
         <input type="hidden" name="as_user_id" id="as_user_id" value="{{ auth()->id() }}" />
-        <div class="mb-3">
+        <div class="mb-3 position-relative" id="editorContainer">
+          <div id="editorLoading" class="textarea-overlay d-none">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+          </div>
           <textarea class="form-control" name="content" rows="7" placeholder="Write your update in Markdown...">{{ old('content', $myEntry->content ?? '') }}</textarea>
         </div>
         <div class="text-muted small mb-2">
@@ -150,6 +157,13 @@
       </div>
     </div>
   </div>
+  <!-- Global Loading Overlay -->
+  <div id="loadingOverlay" class="loading-overlay d-none">
+    <div class="d-flex align-items-center p-3 bg-white border rounded shadow">
+      <div class="spinner-border text-primary me-2" role="status" aria-hidden="true"></div>
+      <div class="loading-text">Loading…</div>
+    </div>
+  </div>
   @foreach($teamUsers as $u)
   @if(auth()->user()->admin || $u->id === auth()->id())
   <div class="modal fade" id="editUserModal-{{ $u->id }}" tabindex="-1" aria-hidden="true">
@@ -234,6 +248,20 @@
   const asUserInput = document.getElementById('as_user_id');
   const selfId = {{ auth()->id() }};
   const selfName = @json(auth()->user()->name);
+  const overlay = document.getElementById('loadingOverlay');
+  const modalHeader = document.querySelector('#reportModal .modal-header');
+  const editorLoading = document.getElementById('editorLoading');
+
+  function showLoading(text = 'Loading…'){
+    if (overlay){
+      const t = overlay.querySelector('.loading-text');
+      if (t) t.textContent = text;
+      overlay.classList.remove('d-none');
+    }
+  }
+  function hideLoading(){
+    if (overlay){ overlay.classList.add('d-none'); }
+  }
   function setPostAs(id, name){
     asUserInput.value = id;
     const label = document.getElementById('asLabel-'+id);
@@ -245,27 +273,39 @@
 
   async function generateDaily(){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
-    const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-    const data = await res.json();
-    document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
-    document.getElementById('reportHtml').innerHTML = data.html;
-    const copyBtn = document.getElementById('copyBtn');
-    copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
-    const modal = new bootstrap.Modal(document.getElementById('reportModal'));
-    modal.show();
+    showLoading('Generating daily report…');
+    try {
+      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const data = await res.json();
+      if (modalHeader) modalHeader.classList.remove('d-none');
+      document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
+      document.getElementById('reportHtml').innerHTML = data.html;
+      const copyBtn = document.getElementById('copyBtn');
+      copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      modal.show();
+    } finally {
+      hideLoading();
+    }
   }
 
   async function generateWeekly(){
     const start = document.getElementById('weeklyStart')?.value || '{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}';
     const end = document.getElementById('weeklyEnd')?.value || '{{ $date }}';
-    const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-    const data = await res.json();
-    document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
-    document.getElementById('reportHtml').innerHTML = data.html;
-    const copyBtn = document.getElementById('copyBtn');
-    copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
-    const modal = new bootstrap.Modal(document.getElementById('reportModal'));
-    modal.show();
+    showLoading('Generating weekly report…');
+    try {
+      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const data = await res.json();
+      if (modalHeader) modalHeader.classList.remove('d-none');
+      document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
+      document.getElementById('reportHtml').innerHTML = data.html;
+      const copyBtn = document.getElementById('copyBtn');
+      copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      modal.show();
+    } finally {
+      hideLoading();
+    }
   }
 
   function resetPostAs(){
@@ -274,27 +314,41 @@
 
   async function viewStatusesForDate(){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
-    const res = await fetch(`{{ route('statuses.date') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-    const data = await res.json();
-    document.getElementById('reportTitle').innerText = `Statuses - ${date}`;
-    document.getElementById('reportHtml').innerHTML = data.html;
-    const copyBtn = document.getElementById('copyBtn');
-    copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
-    const modal = new bootstrap.Modal(document.getElementById('reportModal'));
-    modal.show();
+    showLoading('Loading statuses…');
+    try {
+      const res = await fetch(`{{ route('statuses.date') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const data = await res.json();
+      if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
+      document.getElementById('reportTitle').innerText = `Statuses - ${date}`;
+      document.getElementById('reportHtml').innerHTML = data.html;
+      initStatusFilters(document.getElementById('reportHtml'));
+      const copyBtn = document.getElementById('copyBtn');
+      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      modal.show();
+    } finally {
+      hideLoading();
+    }
   }
 
   async function viewStatusesForRange(){
     const start = document.getElementById('statusStart').value;
     const end = document.getElementById('statusEnd').value;
-    const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-    const data = await res.json();
-    document.getElementById('reportTitle').innerText = `Statuses - ${data.start} → ${data.end}`;
-    document.getElementById('reportHtml').innerHTML = data.html;
-    const copyBtn = document.getElementById('copyBtn');
-    copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
-    const modal = new bootstrap.Modal(document.getElementById('reportModal'));
-    modal.show();
+    showLoading('Loading statuses…');
+    try {
+      const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const data = await res.json();
+      if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
+      document.getElementById('reportTitle').innerText = `Statuses - ${data.start} → ${data.end}`;
+      document.getElementById('reportHtml').innerHTML = data.html;
+      initStatusFilters(document.getElementById('reportHtml'));
+      const copyBtn = document.getElementById('copyBtn');
+      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      modal.show();
+    } finally {
+      hideLoading();
+    }
   }
 
   function stripHtml(html){
@@ -305,6 +359,7 @@
 
   async function loadEntryFor(userId){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    if (editorLoading) editorLoading.classList.remove('d-none');
     try {
       const res = await fetch(`{{ route('entries.fetch') }}?user_id=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       if(!res.ok) return;
@@ -312,6 +367,34 @@
       const ta = document.querySelector('textarea[name="content"]');
       if (ta) { ta.value = data.found ? data.content : ''; }
     } catch (e) {}
+    finally { if (editorLoading) editorLoading.classList.add('d-none'); }
+  }
+
+  function initStatusFilters(root){
+    if (!root) return;
+    const cbs = Array.from(root.querySelectorAll('.user-filter'));
+    const allBtn = root.querySelector('.filter-select-all');
+    const noneBtn = root.querySelector('.filter-select-none');
+
+    function apply(){
+      const selected = new Set(cbs.filter(cb => cb.checked).map(cb => cb.value));
+      const items = Array.from(root.querySelectorAll('.entry-item'));
+      items.forEach(item => {
+        const uid = item.getAttribute('data-user-id');
+        item.classList.toggle('d-none', !selected.has(uid));
+      });
+      // Hide accordion groups with no visible items
+      const groups = Array.from(root.querySelectorAll('.accordion-item'));
+      groups.forEach(g => {
+        const visible = g.querySelector('.entry-item:not(.d-none)');
+        g.classList.toggle('d-none', !visible);
+      });
+    }
+
+    cbs.forEach(cb => cb.addEventListener('change', apply));
+    if (allBtn) allBtn.addEventListener('click', () => { cbs.forEach(cb => cb.checked = true); apply(); });
+    if (noneBtn) noneBtn.addEventListener('click', () => { cbs.forEach(cb => cb.checked = false); apply(); });
+    apply();
   }
 </script>
 @endpush
