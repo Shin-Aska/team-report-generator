@@ -22,3 +22,5 @@ Morning, everyone. We're making good progress across the team. James, Jayson, an
 
 We have no hard blockers, but as an FYI, James is waiting on a PR merge and confirmation from Viktor to move forward with the Expression Agent.
 ```
+
+Ensure that the way you compress the report is no longer than two paragraphs long unless it is necessary to make it longer (such as when there are a lot of blockers or when there are a lot of highlights).
