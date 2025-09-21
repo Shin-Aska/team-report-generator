@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Http;
 class SummarizerService
 {
     // Two-step daily pipeline: daily1 -> daily2, using {concatenated_report_here}
-    public function summarizeDaily(array $entries, string $date, string $daily1Template, string $daily2Template): string
+    public function summarizeDaily(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null): string
     {
-        $concatenated = $this->concatenateEntries($entries);
+        $concatenated = $this->concatenateEntries($entries, $user);
         // Step 1
         $prompt1 = str_replace('{concatenated_report_here}', $concatenated, $daily1Template);
         $first = $this->callGeminiText($prompt1) ?? $this->callOpenAIText($prompt1);
@@ -42,11 +42,14 @@ class SummarizerService
         return implode("\n", $lines);
     }
 
-    protected function concatenateEntries(array $entries): string
+    protected function concatenateEntries(array $entries, ?string $user = null): string
     {
         $parts = [];
         foreach ($entries as $e) {
             $who = $e['user'] ?? 'Unknown';
+            if ($user !== null && isset($e['user']) && $e['user'] === $user) {
+                $who = 'Myself';
+            }
             $date = $e['date'] ?? '';
             $content = trim((string)($e['content'] ?? ''));
             $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;

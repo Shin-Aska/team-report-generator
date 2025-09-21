@@ -145,7 +145,8 @@ class DashboardController extends Controller
             $entries,
             $date,
             $prompts->getDaily1Template(),
-            $prompts->getDaily2Template()
+            $prompts->getDaily2Template(),
+            Auth::user()?->name
         );
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
