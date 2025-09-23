@@ -4,8 +4,12 @@
 <style>
   .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
   .loading-overlay.d-none { display: none !important; }
+  .subcard { background: var(--bs-light-bg-subtle, #f8f9fc); border: 1px solid rgba(0,0,0,.06); border-radius: .5rem; }
+  .avatar-sm { width: 40px; height: 40px; border-radius: 50%; background: var(--bs-primary-bg-subtle, #e7f1ff); display: inline-flex; align-items:center; justify-content:center; font-weight:600; color: var(--bs-primary, #0d6efd); font-size: .95rem; }
+  .team-list .list-group-item { border: 0; border-bottom: 1px solid rgba(0,0,0,.05); }
+  .team-list .status-icon { font-size: 1.1rem; }
 </style>
-<div class="row g-4">
+<div class="row g-4 d-none">
   <div class="col-12">
     <div class="page-card p-4">
       <div class="d-flex align-items-center justify-content-between mb-3">
@@ -241,16 +245,126 @@
   </div>
   @endpush
 </div>
+<!-- New Dashboard UI -->
+<div class="row g-4 align-items-start">
+  <!-- Left: My Daily Update -->
+  <div class="col-12 col-lg-8">
+    <div class="page-card p-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h4 class="mb-0 fw-semibold">MY DAILY UPDATE FOR {{ \Illuminate\Support\Carbon::parse($date)->format('m/d/Y') }}</h4>
+      </div>
+
+      <form method="POST" action="{{ route('entries.publish') }}" id="publishFormNew">
+        @csrf
+        <input type="hidden" name="entry_date" value="{{ $date }}"/>
+        <input type="hidden" name="as_user_id" id="as_user_id" value="{{ auth()->id() }}" />
+        <!-- unified textarea is rendered below inside editorContainer -->
+
+        <div class="position-relative" id="editorContainer">
+          <div id="editorLoadingNew" class="textarea-overlay d-none">
+            <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
+          </div>
+
+          <textarea id="contentField" name="content" class="form-control" rows="10" placeholder="Write your update in Markdown...">{{ old('content', $myEntry->content ?? '') }}</textarea>
+        </div>
+
+        <div class="text-muted small mb-2">
+          Posting as:
+          <span class="badge bg-info text-dark" id="postAsName">{{ auth()->user()->name }} (You)</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="resetPostAs()">Post as me</button>
+        </div>
+        <div class="d-flex justify-content-end">
+          <button class="btn btn-primary">Submit My Update</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Statuses card beneath the daily update -->
+    <div class="page-card p-4 mt-4">
+      <h5 class="mb-3">Statuses</h5>
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-4 d-grid">
+          <button class="btn btn-outline-secondary" type="button" onclick="viewStatusesForDate()">View team statuses (date)</button>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">Start</label>
+          <input type="date" class="form-control" id="statusStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}">
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label mb-1">End</label>
+          <input type="date" class="form-control" id="statusEndNew" value="{{ $date }}">
+        </div>
+        <div class="col-12 col-md-2 d-grid">
+          <button class="btn btn-outline-secondary" type="button" onclick="viewStatusesForRange()">View statuses (range)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Team Dashboard -->
+  <div class="col-12 col-lg-4">
+    <div class="page-card p-4">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">TEAM DASHBOARD</h5>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label mb-1">Date:</label>
+        <form id="sideDateForm" method="GET" action="{{ route('dashboard') }}" class="input-group">
+          <input type="date" name="date" class="form-control" value="{{ $date }}" onchange="document.getElementById('sideDateForm').submit()"/>
+          <a class="btn btn-outline-secondary" href="{{ route('dashboard') }}" title="Today">Today</a>
+        </form>
+      </div>
+
+      <div class="small text-muted mb-2">Team Status for {{ \Illuminate\Support\Carbon::parse($date)->format('m/d/Y') }}</div>
+      <div class="list-group team-list mb-4">
+        @php $submitted = $teamEntries->pluck('user_id')->all(); @endphp
+        @foreach($teamUsers as $u)
+          <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3" onclick="setPostAs({{ $u->id }}, '{{ addslashes($u->name) }}')" title="Post as {{ $u->name }}">
+            <div class="avatar-sm">{{ strtoupper(substr($u->name,0,1)) }}</div>
+            <div class="flex-grow-1">
+              <div class="{{ $u->id === auth()->id() ? 'fw-semibold' : '' }}">{{ $u->id === auth()->id() ? 'You' : $u->name }}</div>
+            </div>
+            @if(in_array($u->id, $submitted))
+              <span class="status-icon text-success">✓</span>
+            @else
+              <span class="status-icon text-secondary">🕘</span>
+            @endif
+          </button>
+        @endforeach
+      </div>
+
+      <div class="mb-3">
+        <div class="fw-semibold mb-2">Reporting</div>
+        <button class="btn btn-primary w-100" type="button" onclick="generateDaily()">Generate Daily Report</button>
+      </div>
+
+      <div class="fw-semibold mb-2">Generate Team Summary</div>
+      <div class="mb-2">
+        <label class="form-label mb-1">Start:</label>
+        <input type="date" class="form-control" id="weeklyStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}">
+      </div>
+      <div class="mb-3">
+        <label class="form-label mb-1">End:</label>
+        <input type="date" class="form-control" id="weeklyEndNew" value="{{ $date }}">
+      </div>
+      <div class="d-grid">
+        <button class="btn btn-primary" type="button" onclick="generateWeekly()">Generate Summary</button>
+      </div>
+      
+    </div>
+  </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
-  const asUserInput = document.getElementById('as_user_id');
+  const asUserInput = document.querySelector('#publishFormNew #as_user_id') || document.getElementById('as_user_id');
   const selfId = {{ auth()->id() }};
   const selfName = @json(auth()->user()->name);
   const overlay = document.getElementById('loadingOverlay');
   const modalHeader = document.querySelector('#reportModal .modal-header');
-  const editorLoading = document.getElementById('editorLoading');
+  const editorLoading = document.getElementById('editorLoadingNew') || document.getElementById('editorLoading');
 
   function showLoading(text = 'Loading…'){
     if (overlay){
@@ -266,7 +380,7 @@
     asUserInput.value = id;
     const label = document.getElementById('asLabel-'+id);
     if(label){ label.classList.add('fw-semibold'); }
-    const postAs = document.getElementById('postAsName');
+    const postAs = document.querySelector('#publishFormNew #postAsName') || document.getElementById('postAsName');
     if(postAs){ postAs.textContent = (id === selfId) ? `${selfName} (You)` : name; }
     loadEntryFor(id);
   }
@@ -290,8 +404,8 @@
   }
 
   async function generateWeekly(){
-    const start = document.getElementById('weeklyStart')?.value || '{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}';
-    const end = document.getElementById('weeklyEnd')?.value || '{{ $date }}';
+    const start = document.getElementById('weeklyStartNew')?.value || document.getElementById('weeklyStart')?.value || '{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}';
+    const end = document.getElementById('weeklyEndNew')?.value || document.getElementById('weeklyEnd')?.value || '{{ $date }}';
     showLoading('Generating weekly report…');
     try {
       const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
@@ -332,8 +446,8 @@
   }
 
   async function viewStatusesForRange(){
-    const start = document.getElementById('statusStart').value;
-    const end = document.getElementById('statusEnd').value;
+    const start = document.getElementById('statusStartNew')?.value || document.getElementById('statusStart')?.value;
+    const end = document.getElementById('statusEndNew')?.value || document.getElementById('statusEnd')?.value;
     showLoading('Loading statuses…');
     try {
       const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
@@ -357,6 +471,36 @@
     return tmp.textContent || tmp.innerText || '';
   }
 
+  function toBullets(text){
+    if(!text) return '';
+    const lines = text.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
+    return lines.map(l => l.startsWith('-') ? l : `- ${l}`).join('\n');
+  }
+
+  function composeMarkdown(){
+    // With unified textarea we don't need composition; keep as passthrough
+    const contentEl = document.getElementById('contentField');
+    return contentEl ? contentEl.value : '';
+  }
+
+  function populateFromMarkdown(md){
+    // No-op for unified textarea variant
+    return;
+  }
+
+  // Hook new form submit to compose markdown into hidden field
+  const publishFormNew = document.getElementById('publishFormNew');
+  if (publishFormNew){
+    publishFormNew.addEventListener('submit', function(){
+      const hidden = document.getElementById('contentField');
+      // Only compose if legacy section fields exist
+      const hasSections = document.getElementById('accomplishmentsField') || document.getElementById('planField') || document.getElementById('blockersField');
+      if (hidden && hasSections){ hidden.value = composeMarkdown(); }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){ /* no-op for unified field */ });
+
   async function loadEntryFor(userId){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
     if (editorLoading) editorLoading.classList.remove('d-none');
@@ -364,8 +508,8 @@
       const res = await fetch(`{{ route('entries.fetch') }}?user_id=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       if(!res.ok) return;
       const data = await res.json();
-      const ta = document.querySelector('textarea[name="content"]');
-      if (ta) { ta.value = data.found ? data.content : ''; }
+      const hidden = document.getElementById('contentField');
+      if (hidden) { hidden.value = data.found ? data.content : ''; }
     } catch (e) {}
     finally { if (editorLoading) editorLoading.classList.add('d-none'); }
   }
