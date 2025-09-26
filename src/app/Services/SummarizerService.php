@@ -77,18 +77,20 @@ class SummarizerService
     {
         $key = env('GEMINI_API_KEY');
         if (!$key) return null;
-        try {
-            $model = env('GEMINI_MODEL', 'gemini-2.5-pro');
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.urlencode($model).':generateContent?key='.$key;
-            $payload = [ 'contents' => [ [ 'parts' => [ [ 'text' => $text ] ] ] ] ];
-            $resp = Http::timeout(30)->asJson()->withHeaders(['Accept'=>'application/json'])->post($url, $payload);
-            if ($resp->successful()) {
-                $candidates = $resp->json('candidates');
-                if (is_array($candidates) && isset($candidates[0]['content']['parts'][0]['text'])) {
-                    return $candidates[0]['content']['parts'][0]['text'];
+        $models = ['gemini-2.5-pro', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash-lite'];
+        foreach ($models as $model) {
+            try {
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.urlencode($model).':generateContent?key='.$key;
+                $payload = [ 'contents' => [ [ 'parts' => [ [ 'text' => $text ] ] ] ] ];
+                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept'=>'application/json'])->post($url, $payload);
+                if ($resp->successful()) {
+                    $candidates = $resp->json('candidates');
+                    if (is_array($candidates) && isset($candidates[0]['content']['parts'][0]['text'])) {
+                        return $candidates[0]['content']['parts'][0]['text'];
+                    }
                 }
-            }
-        } catch (\Throwable $e) { }
+            } catch (\Throwable $e) { }
+        }
         return null;
     }
 
