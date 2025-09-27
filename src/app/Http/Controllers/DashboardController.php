@@ -12,6 +12,8 @@ use App\Models\Entry;
 use App\Models\User;
 use App\Services\PromptService;
 use App\Services\SummarizerService;
+use App\Services\UserManager;
+use Illuminate\Auth\Access\AuthorizationException;
 
 class DashboardController extends Controller
 {
@@ -40,56 +42,46 @@ class DashboardController extends Controller
     }
 
     // Team management
-    public function storeUser(Request $request)
+    public function storeUser(Request $request, UserManager $users)
     {
-        if (!Auth::user()->admin) {
-            abort(403);
-        }
         $data = $request->validate([
             'name' => ['required','string','max:255'],
             'email' => ['required','email','max:255','unique:users,email'],
             'password' => ['required','string','min:4'],
         ]);
-
-        // password will be hashed via User::$casts
-        User::create($data);
-
-        return back()->with('status', 'User added.');
+        try {
+            // password will be hashed via User::$casts
+            $users->create($data, Auth::user());
+            return back()->with('status', 'User added.');
+        } catch (AuthorizationException $e) {
+            return back()->withErrors(['user' => $e->getMessage()]);
+        }
     }
 
-    public function destroyUser(User $user)
+    public function destroyUser(User $user, UserManager $users)
     {
-        if (!Auth::user()->admin) {
-            abort(403);
+        try {
+            $users->delete($user, Auth::user());
+            return back()->with('status', 'User removed.');
+        } catch (AuthorizationException $e) {
+            return back()->withErrors(['user' => $e->getMessage()]);
         }
-        if (Auth::id() === $user->id) {
-            return back()->withErrors(['user' => 'You cannot delete yourself.']);
-        }
-        $user->delete();
-        return back()->with('status', 'User removed.');
     }
 
-    public function updateUser(Request $request, User $user)
+    public function updateUser(Request $request, User $user, UserManager $users)
     {
-        $actor = Auth::user();
-        $isSelf = $actor->id === $user->id;
-        if (!$isSelf && !$actor->admin) {
-            abort(403);
-        }
         $data = $request->validate([
             'name' => ['required','string','max:255'],
             'email' => ['required','email','max:255', Rule::unique('users','email')->ignore($user->id)],
             'password' => ['nullable','string','min:4'],
             'admin' => ['nullable','boolean'],
         ]);
-        if (empty($data['password'])) {
-            unset($data['password']);
+        try {
+            $users->update($user, $data, Auth::user());
+            return back()->with('status', 'User updated.');
+        } catch (AuthorizationException $e) {
+            return back()->withErrors(['user' => $e->getMessage()]);
         }
-        if (!$actor->admin) {
-            unset($data['admin']);
-        }
-        $user->update($data);
-        return back()->with('status', 'User updated.');
     }
 
     public function fetchEntry(Request $request)

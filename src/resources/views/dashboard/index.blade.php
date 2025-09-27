@@ -322,6 +322,9 @@
     <div class="page-card p-4">
       <div class="d-flex align-items-center justify-content-between mb-2">
         <h5 class="mb-0">TEAM DASHBOARD</h5>
+        @if(auth()->user()->admin)
+          <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#addUserModal">Add user</button>
+        @endif
       </div>
 
       <div class="mb-3">
@@ -336,7 +339,7 @@
       <div class="list-group team-list mb-4">
         @php $submitted = $teamEntries->pluck('user_id')->all(); @endphp
         @foreach($teamUsers as $u)
-          <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3" onclick="setPostAs({{ $u->id }}, '{{ addslashes($u->name) }}')" title="Post as {{ $u->name }}">
+          <div class="list-group-item list-group-item-action d-flex align-items-center gap-3" role="button" onclick="setPostAs({{ $u->id }}, '{{ addslashes($u->name) }}')" title="Post as {{ $u->name }}">
             <div class="avatar-sm">{{ strtoupper(substr($u->name,0,1)) }}</div>
             <div class="flex-grow-1">
               <div class="{{ $u->id === auth()->id() ? 'fw-semibold' : '' }}">{{ $u->id === auth()->id() ? 'You' : $u->name }}</div>
@@ -346,7 +349,25 @@
             @else
               <span class="status-icon text-secondary">🕘</span>
             @endif
-          </button>
+            @if(auth()->user()->admin || $u->id === auth()->id())
+              <div class="dropdown ms-2" onclick="event.stopPropagation();">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="User actions">…</button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#editUserModal-{{ $u->id }}" onclick="event.preventDefault();">Edit</a></li>
+                  @if(auth()->user()->admin && $u->id !== auth()->id())
+                  <li><hr class="dropdown-divider"></li>
+                  <li>
+                    <form method="POST" action="{{ route('team.users.destroy', $u) }}" onsubmit="return confirm('Delete {{ $u->name }}?');">
+                      @csrf
+                      @method('DELETE')
+                      <button type="submit" class="dropdown-item text-danger">Delete</button>
+                    </form>
+                  </li>
+                  @endif
+                </ul>
+              </div>
+            @endif
+          </div>
         @endforeach
       </div>
 

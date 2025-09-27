@@ -111,6 +111,23 @@
 </nav>
 
 <main class="container mb-5">
+  @if (session('status'))
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      {{ session('status') }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  @endif
+  @if ($errors->any())
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <div class="fw-semibold mb-1">There were some problems with your submission:</div>
+      <ul class="mb-0">
+        @foreach ($errors->all() as $error)
+          <li>{{ $error }}</li>
+        @endforeach
+      </ul>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  @endif
   @yield('content')
   @stack('modals')
 </main>
