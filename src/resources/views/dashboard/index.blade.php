@@ -4,7 +4,7 @@
 <style>
   .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
   .loading-overlay.d-none { display: none !important; }
-  .subcard { background: var(--bs-light-bg-subtle, #f8f9fc); border: 1px solid rgba(0,0,0,.06); border-radius: .5rem; }
+  .subcard { background: var(--bs-light-bg-subtle, #f8f9fc); color: var(--bs-body-color); border: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,.06)); border-radius: .5rem; }
   .avatar-sm { width: 40px; height: 40px; border-radius: 50%; background: var(--bs-primary-bg-subtle, #e7f1ff); display: inline-flex; align-items:center; justify-content:center; font-weight:600; color: var(--bs-primary, #0d6efd); font-size: .95rem; }
   .team-list .list-group-item { border: 0; border-bottom: 1px solid rgba(0,0,0,.05); }
   .team-list .status-icon { font-size: 1.1rem; }

@@ -14,6 +14,14 @@
           quartz: "{{ asset('css/bootstrap-quartz.css') }}",
           sandstone: "{{ asset('css/bootstrap-sandstone.css') }}"
         };
+        window.THEME_VARIANTS = { // maps theme -> data-bs-theme
+          cyborg: 'dark',
+          sketch: 'light',
+          brite: 'light',
+          flatly: 'light',
+          quartz: 'light',
+          sandstone: 'light'
+        };
         (function(){
           function getCookie(name){
             var parts = document.cookie ? document.cookie.split('; ') : [];
@@ -24,6 +32,9 @@
             return null;
           }
           var chosen = getCookie('theme') || 'sketch';
+          var variant = (window.THEME_VARIANTS && window.THEME_VARIANTS[chosen]) || 'light';
+          try { document.documentElement.setAttribute('data-bs-theme', variant); } catch(e) {}
+          try { document.documentElement.setAttribute('data-theme-name', chosen); } catch(e) {}
           var href = (window.THEME_ASSETS && window.THEME_ASSETS[chosen]) ? window.THEME_ASSETS[chosen] : window.THEME_ASSETS.sketch;
           document.write('<link rel="stylesheet" id="themeStylesheet" href="' + href + '">');
         })();
@@ -32,12 +43,41 @@
         <link href="{{ asset('css/bootstrap-sketch-theme.css') }}" rel="stylesheet">
     </noscript>
     <style>
-        body { background: var(--bs-body-bg, #f5f7fb); }
-        .page-card { background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.06); border-radius: 12px; }
-        .toolbar { background: var(--bs-primary, #0d6efd); color: #fff; }
+        body { background: var(--bs-body-bg, #f5f7fb); color: var(--bs-body-color); }
+        .page-card { background: var(--bs-card-bg, var(--bs-body-bg)); color: var(--bs-body-color); border: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,.125)); box-shadow: 0 6px 18px rgba(0,0,0,.06); border-radius: 12px; }
+        /* Navbar/tooling uses theme-aware variables for contrast */
+        .toolbar { background: var(--bs-navbar-bg, var(--bs-body-bg)); color: var(--bs-navbar-color, var(--bs-body-color)); border-bottom: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,.125)); }
         .avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--bs-primary-bg-subtle, #e7f1ff); display: inline-flex; align-items:center; justify-content:center; font-weight:600; color: var(--bs-primary, #0d6efd); }
-        .markdown-preview h1, .markdown-preview h2, .markdown-preview h3 { margin-top:1.25rem; }
+        .markdown-preview { color: var(--bs-body-color); }
+        .markdown-preview h1, .markdown-preview h2, .markdown-preview h3, .markdown-preview h4, .markdown-preview h5, .markdown-preview h6 { margin-top:1.25rem; color: var(--bs-emphasis-color); }
+        .markdown-preview a { color: var(--bs-link-color); }
+        .markdown-preview pre, .markdown-preview code { color: var(--bs-code-color, var(--bs-emphasis-color)); background: var(--bs-tertiary-bg, transparent); }
         .markdown-preview ul { padding-left: 1.4rem; }
+        /* Quartz readability overrides: ensure secondary/subtitle text is dark enough */
+        html[data-theme-name="quartz"] { 
+          --bs-secondary-color: rgba(33, 37, 41, 0.75);
+          --bs-tertiary-color: rgba(33, 37, 41, 0.55);
+          --bs-card-color: var(--bs-body-color);
+        }
+        html[data-theme-name="quartz"] .text-body-secondary,
+        html[data-theme-name="quartz"] .text-muted,
+        html[data-theme-name="quartz"] .card-subtitle,
+        html[data-theme-name="quartz"] .text-secondary,
+        html[data-theme-name="quartz"] .subtext,
+        html[data-theme-name="quartz"] small {
+          color: rgba(33, 37, 41, 0.75) !important;
+        }
+        html[data-theme-name="quartz"] .card-text { color: var(--bs-body-color) !important; }
+        html[data-theme-name="quartz"] .subcard {
+          background: var(--bs-tertiary-bg, var(--bs-light-bg-subtle));
+          color: var(--bs-body-color) !important;
+          border-color: var(--bs-border-color-translucent, rgba(0,0,0,.125));
+        }
+        html[data-theme-name="quartz"] .subcard a { color: var(--bs-link-color) !important; }
+        html[data-theme-name="quartz"] .subcard .fw-semibold,
+        html[data-theme-name="quartz"] .subcard .small,
+        html[data-theme-name="quartz"] .subcard p,
+        html[data-theme-name="quartz"] .subcard div { color: var(--bs-body-color) !important; }
         .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
         .loading-overlay.d-none { display: none !important; }
         .textarea-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 10; }
@@ -47,10 +87,10 @@
 <body>
 <nav class="navbar navbar-expand-lg toolbar mb-4">
   <div class="container">
-    <a class="navbar-brand text-white fw-semibold" href="{{ route('dashboard') }}">ReportGen</a>
+    <a class="navbar-brand fw-semibold" href="{{ route('dashboard') }}">ReportGen</a>
     <div class="ms-auto d-flex align-items-center gap-2">
       <div class="dropdown me-2">
-        <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+        <button class="btn btn-sm btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
           Theme: <span id="currentThemeLabel">Sketch</span>
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
@@ -127,10 +167,15 @@
         if (link && window.THEME_ASSETS && window.THEME_ASSETS[theme]){
           link.href = window.THEME_ASSETS[theme];
         }
+        var variant = (window.THEME_VARIANTS && window.THEME_VARIANTS[theme]) || 'light';
+        try { document.documentElement.setAttribute('data-bs-theme', variant); } catch(e) {}
+        try { document.documentElement.setAttribute('data-theme-name', theme); } catch(e) {}
         updateThemeLabel(theme);
       }
       document.addEventListener('DOMContentLoaded', function(){
         var theme = getCookie('theme') || 'sketch';
+        var variant = (window.THEME_VARIANTS && window.THEME_VARIANTS[theme]) || 'light';
+        try { document.documentElement.setAttribute('data-bs-theme', variant); } catch(e) {}
         updateThemeLabel(theme);
         document.querySelectorAll('.theme-option').forEach(function(el){
           el.addEventListener('click', function(e){
