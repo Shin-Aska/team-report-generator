@@ -8,7 +8,11 @@
     <script>
         window.THEME_ASSETS = {
           sketch: "{{ asset('css/bootstrap-sketch-theme.css') }}",
-          brite: "{{ asset('css/bootstrap-brite.css') }}"
+          brite: "{{ asset('css/bootstrap-brite.css') }}",
+          cyborg: "{{ asset('css/bootstrap-cyborg.css') }}",
+          flatly: "{{ asset('css/bootstrap-flatly.css') }}",
+          quartz: "{{ asset('css/bootstrap-quartz.css') }}",
+          sandstone: "{{ asset('css/bootstrap-sandstone.css') }}"
         };
         (function(){
           function getCookie(name){
@@ -52,6 +56,10 @@
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item theme-option" data-theme="sketch" href="#">Sketch</a></li>
           <li><a class="dropdown-item theme-option" data-theme="brite" href="#">Brite</a></li>
+          <li><a class="dropdown-item theme-option" data-theme="cyborg" href="#">Cyborg</a></li>
+          <li><a class="dropdown-item theme-option" data-theme="flatly" href="#">Flatly</a></li>
+          <li><a class="dropdown-item theme-option" data-theme="quartz" href="#">Quartz</a></li>
+          <li><a class="dropdown-item theme-option" data-theme="sandstone" href="#">Sandstone</a></li>
         </ul>
       </div>
       <form method="POST" action="{{ route('logout') }}" class="d-inline">
@@ -110,7 +118,8 @@
       }
       function updateThemeLabel(theme){
         var label = document.getElementById('currentThemeLabel');
-        if (label) label.textContent = theme === 'brite' ? 'Brite' : 'Sketch';
+        var display = { sketch: 'Sketch', brite: 'Brite', cyborg: 'Cyborg', flatly: 'Flatly', quartz: 'Quartz', sandstone: 'Sandstone' };
+        if (label) label.textContent = display[theme] || 'Sketch';
       }
       function setTheme(theme){
         setCookie('theme', theme, 365);
