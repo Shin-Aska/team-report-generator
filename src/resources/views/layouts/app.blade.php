@@ -5,7 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? 'Report Generator' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="{{ asset('css/bootstrap-sketch-theme.css') }}" rel="stylesheet">
+    <script>
+        window.THEME_ASSETS = {
+          sketch: "{{ asset('css/bootstrap-sketch-theme.css') }}",
+          brite: "{{ asset('css/bootstrap-brite.css') }}"
+        };
+        (function(){
+          function getCookie(name){
+            var parts = document.cookie ? document.cookie.split('; ') : [];
+            for (var i = 0; i < parts.length; i++){
+              var p = parts[i].split('=');
+              if (p[0] === name) return decodeURIComponent(p.slice(1).join('='));
+            }
+            return null;
+          }
+          var chosen = getCookie('theme') || 'sketch';
+          var href = (window.THEME_ASSETS && window.THEME_ASSETS[chosen]) ? window.THEME_ASSETS[chosen] : window.THEME_ASSETS.sketch;
+          document.write('<link rel="stylesheet" id="themeStylesheet" href="' + href + '">');
+        })();
+    </script>
+    <noscript>
+        <link href="{{ asset('css/bootstrap-sketch-theme.css') }}" rel="stylesheet">
+    </noscript>
     <style>
         body { background: var(--bs-body-bg, #f5f7fb); }
         .page-card { background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.06); border-radius: 12px; }
@@ -23,7 +44,16 @@
 <nav class="navbar navbar-expand-lg toolbar mb-4">
   <div class="container">
     <a class="navbar-brand text-white fw-semibold" href="{{ route('dashboard') }}">ReportGen</a>
-    <div class="ms-auto">
+    <div class="ms-auto d-flex align-items-center gap-2">
+      <div class="dropdown me-2">
+        <button class="btn btn-sm btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          Theme: <span id="currentThemeLabel">Sketch</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item theme-option" data-theme="sketch" href="#">Sketch</a></li>
+          <li><a class="dropdown-item theme-option" data-theme="brite" href="#">Brite</a></li>
+        </ul>
+      </div>
       <form method="POST" action="{{ route('logout') }}" class="d-inline">
         @csrf
         <button class="btn btn-sm btn-light">Logout</button>
@@ -58,6 +88,50 @@
       overlay.classList.add('d-none');
     };
   })();
+  </script>
+  <script>
+    (function(){
+      function setCookie(name, value, days){
+        var expires = '';
+        if (days){
+          var d = new Date();
+          d.setTime(d.getTime() + (days*24*60*60*1000));
+          expires = '; expires=' + d.toUTCString();
+        }
+        document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/; SameSite=Lax';
+      }
+      function getCookie(name){
+        var parts = document.cookie ? document.cookie.split('; ') : [];
+        for (var i = 0; i < parts.length; i++){
+          var p = parts[i].split('=');
+          if (p[0] === name) return decodeURIComponent(p.slice(1).join('='));
+        }
+        return null;
+      }
+      function updateThemeLabel(theme){
+        var label = document.getElementById('currentThemeLabel');
+        if (label) label.textContent = theme === 'brite' ? 'Brite' : 'Sketch';
+      }
+      function setTheme(theme){
+        setCookie('theme', theme, 365);
+        var link = document.getElementById('themeStylesheet');
+        if (link && window.THEME_ASSETS && window.THEME_ASSETS[theme]){
+          link.href = window.THEME_ASSETS[theme];
+        }
+        updateThemeLabel(theme);
+      }
+      document.addEventListener('DOMContentLoaded', function(){
+        var theme = getCookie('theme') || 'sketch';
+        updateThemeLabel(theme);
+        document.querySelectorAll('.theme-option').forEach(function(el){
+          el.addEventListener('click', function(e){
+            e.preventDefault();
+            var t = el.getAttribute('data-theme');
+            if (t) setTheme(t);
+          });
+        });
+      });
+    })();
   </script>
 @stack('scripts')
 </body>
