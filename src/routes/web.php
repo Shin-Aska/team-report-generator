@@ -20,7 +20,7 @@ Route::middleware(['web','auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/entries/publish', [DashboardController::class, 'publishEntry'])->name('entries.publish');
     Route::get('/entries/fetch', [DashboardController::class, 'fetchEntry'])->name('entries.fetch');
-    Route::get('/reports/daily', [DashboardController::class, 'dailyReport'])->name('reports.daily');
+    Route::get('/reports/daily', [DashboardController::class, 'standupReport'])->name('reports.daily');
     Route::get('/reports/weekly', [DashboardController::class, 'weeklyReport'])->name('reports.weekly');
     Route::get('/statuses', [DashboardController::class, 'statusesByDate'])->name('statuses.date');
     Route::get('/statuses/range', [DashboardController::class, 'statusesByRange'])->name('statuses.range');

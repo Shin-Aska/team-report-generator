@@ -301,11 +301,11 @@
             <div class="row g-2 align-items-end">
               <div class="col-6">
                 <label class="form-label small mb-1">Start</label>
-                <input type="date" class="form-control" id="statusStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}">
+                <input type="date" class="form-control" id="statusStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->toDateString() }}">
               </div>
               <div class="col-6">
                 <label class="form-label small mb-1">End</label>
-                <input type="date" class="form-control" id="statusEndNew" value="{{ $date }}">
+                <input type="date" class="form-control" id="statusEndNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->addDays(4)->toDateString() }}">
               </div>
               <div class="col-12 d-grid">
                 <button class="btn btn-outline-primary" type="button" onclick="viewStatusesForRange()">View Range</button>
@@ -352,7 +352,7 @@
 
       <div class="mb-3">
         <div class="fw-semibold mb-2">Reporting</div>
-        <button class="btn btn-primary w-100" type="button" onclick="generateDaily()">Generate Daily Report</button>
+        <button class="btn btn-primary w-100" type="button" onclick="generateDaily()">Generate Standup Report</button>
       </div>
 
       <div class="fw-semibold mb-2">Generate Team Summary</div>
@@ -365,9 +365,9 @@
         <input type="date" class="form-control" id="weeklyEndNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->addDays(4)->toDateString() }}">
       </div>
       <div class="d-grid">
-        <button class="btn btn-primary" type="button" onclick="generateWeekly()">Generate Summary</button>
+        <button class="btn btn-primary" type="button" onclick="generateWeekly()">Generate Weekly Summary</button>
       </div>
-      
+
     </div>
   </div>
 </div>

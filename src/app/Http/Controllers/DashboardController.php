@@ -129,12 +129,6 @@ class DashboardController extends Controller
             ->with('status', 'Entry published.');
     }
 
-    public function dailyReport(Request $request, PromptService $prompts, SummarizerService $sum)
-    {
-        // Keep for compatibility; delegate to the new standupReport()
-        return $this->standupReport($request, $prompts, $sum);
-    }
-
     public function standupReport(Request $request, PromptService $prompts, SummarizerService $sum)
     {
         // Base date comes from query or defaults to today
@@ -180,7 +174,7 @@ class DashboardController extends Controller
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
-                'title' => 'Daily Report',
+                'title' => 'Standup Report',
                 'date' => $date,
                 'html' => $html,
                 'markdown' => $markdown,
