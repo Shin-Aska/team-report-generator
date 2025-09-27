@@ -131,15 +131,44 @@ class DashboardController extends Controller
 
     public function dailyReport(Request $request, PromptService $prompts, SummarizerService $sum)
     {
-        $date = $request->query('date', Carbon::now()->toDateString());
-        $entries = Entry::with('user')
-            ->whereDate('entry_date', $date)
+        // Keep for compatibility; delegate to the new standupReport()
+        return $this->standupReport($request, $prompts, $sum);
+    }
+
+    public function standupReport(Request $request, PromptService $prompts, SummarizerService $sum)
+    {
+        // Base date comes from query or defaults to today
+        $base = Carbon::parse($request->query('date', Carbon::now()->toDateString()));
+        $iso = $base->isoWeekday(); // 1=Mon ... 7=Sun
+
+        // Determine which dates to include
+        $dates = [];
+        if ($iso === 2) { // Tuesday -> Monday and last Friday
+            $monday = $base->copy()->subDay()->toDateString();
+            $lastFriday = $base->copy()->startOfWeek(Carbon::MONDAY)->subDays(3)->toDateString();
+            $dates = [$monday, $lastFriday];
+        } else { // Thursday and all other days -> yesterday
+            $dates = [$base->copy()->subDay()->toDateString()];
+        }
+
+        // Fetch entries for the computed dates
+        $query = Entry::with('user');
+        if (count($dates) === 1) {
+            $query->whereDate('entry_date', $dates[0]);
+        } else {
+            $query->whereIn('entry_date', $dates);
+        }
+        $entries = $query
+            ->orderBy('entry_date')
             ->get()
             ->map(fn($e) => [
                 'date' => $e->entry_date->toDateString(),
                 'user' => $e->user?->name ?? 'Unknown',
                 'content' => $e->content,
             ])->all();
+
+        // Keep the original requested/base date for labeling
+        $date = $base->toDateString();
 
         $markdown = $sum->summarizeDaily(
             $entries,
