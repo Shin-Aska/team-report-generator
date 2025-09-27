@@ -108,11 +108,11 @@
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-3">
           <label class="form-label mb-1">Start</label>
-          <input type="date" class="form-control" id="weeklyStart" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}">
+          <input type="date" class="form-control" id="weeklyStart" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->toDateString() }}">
         </div>
         <div class="col-12 col-md-3">
           <label class="form-label mb-1">End</label>
-          <input type="date" class="form-control" id="weeklyEnd" value="{{ $date }}">
+          <input type="date" class="form-control" id="weeklyEnd" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->addDays(4)->toDateString() }}">
         </div>
         <div class="col-12 col-md-2 d-grid">
           <button class="btn btn-outline-primary" type="button" onclick="generateWeekly()">Generate weekly report</button>
@@ -357,12 +357,12 @@
 
       <div class="fw-semibold mb-2">Generate Team Summary</div>
       <div class="mb-2">
-        <label class="form-label mb-1">Start:</label>
-        <input type="date" class="form-control" id="weeklyStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}">
+          <label class="form-label mb-1">Start:</label>
+          <input type="date" class="form-control" id="weeklyStartNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->toDateString() }}">
       </div>
       <div class="mb-3">
         <label class="form-label mb-1">End:</label>
-        <input type="date" class="form-control" id="weeklyEndNew" value="{{ $date }}">
+        <input type="date" class="form-control" id="weeklyEndNew" value="{{ \Illuminate\Support\Carbon::parse($date)->copy()->startOfWeek(\Illuminate\Support\Carbon::MONDAY)->addDays(4)->toDateString() }}">
       </div>
       <div class="d-grid">
         <button class="btn btn-primary" type="button" onclick="generateWeekly()">Generate Summary</button>
@@ -419,12 +419,31 @@
     }
   }
 
+  function toIsoLocal(d){
+    const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return z.toISOString().slice(0,10);
+  }
+  function monFriRange(baseStr){
+    let b = baseStr ? new Date(baseStr) : new Date('{{ $date }}');
+    if (isNaN(b.getTime())) b = new Date('{{ $date }}');
+    const day = b.getDay(); // 0=Sun..6=Sat
+    const diffToMon = (day + 6) % 7; // days since Monday
+    const mon = new Date(b);
+    mon.setDate(b.getDate() - diffToMon);
+    const fri = new Date(mon);
+    fri.setDate(mon.getDate() + 4);
+    return { start: toIsoLocal(mon), end: toIsoLocal(fri) };
+  }
   async function generateWeekly(){
-    const start = document.getElementById('weeklyStartNew')?.value || document.getElementById('weeklyStart')?.value || '{{ \Illuminate\Support\Carbon::parse($date)->copy()->subDays(6)->toDateString() }}';
-    const end = document.getElementById('weeklyEndNew')?.value || document.getElementById('weeklyEnd')?.value || '{{ $date }}';
+    const base = document.getElementById('weeklyEndNew')?.value || document.getElementById('weeklyEnd')?.value || '{{ $date }}';
+    const range = monFriRange(base);
+    const sNew = document.getElementById('weeklyStartNew'); if (sNew) sNew.value = range.start;
+    const eNew = document.getElementById('weeklyEndNew'); if (eNew) eNew.value = range.end;
+    const sOld = document.getElementById('weeklyStart'); if (sOld) sOld.value = range.start;
+    const eOld = document.getElementById('weeklyEnd'); if (eOld) eOld.value = range.end;
     showLoading('Generating weekly report…');
     try {
-      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
@@ -437,6 +456,20 @@
       hideLoading();
     }
   }
+
+  // Auto-adjust when end date changes in either UI block
+  const weeklyEndNewEl = document.getElementById('weeklyEndNew');
+  if (weeklyEndNewEl) weeklyEndNewEl.addEventListener('change', function(){
+    const r = monFriRange(this.value);
+    const s = document.getElementById('weeklyStartNew'); if (s) s.value = r.start;
+    this.value = r.end;
+  });
+  const weeklyEndEl = document.getElementById('weeklyEnd');
+  if (weeklyEndEl) weeklyEndEl.addEventListener('change', function(){
+    const r = monFriRange(this.value);
+    const s = document.getElementById('weeklyStart'); if (s) s.value = r.start;
+    this.value = r.end;
+  });
 
   function resetPostAs(){
     setPostAs(selfId, selfName);
