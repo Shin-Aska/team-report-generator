@@ -23,11 +23,11 @@ class SummarizerService
 
         // Combine $first and $second where it is formatted where $first is the Summary and $second is the Briefdown
         $output = "# Summary\n\n";
-        $output .= $first;
+        $output .= $second;
         if ($second) {
             $output .= "\n\n---\n\n";
             $output .= "# Briefdown\n\n";
-            $output .= $second;
+            $output .= $first;
         }
         return $output;
     }
