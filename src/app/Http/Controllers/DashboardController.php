@@ -141,6 +141,10 @@ class DashboardController extends Controller
             $monday = $base->copy()->subDay()->toDateString();
             $lastFriday = $base->copy()->startOfWeek(Carbon::MONDAY)->subDays(3)->toDateString();
             $dates = [$monday, $lastFriday];
+        } else if ($iso === 4) { // Thursday -> Wednesday and Tuesday
+            $wednesday = $base->copy()->subDay()->toDateString();
+            $tuesday = $base->copy()->subDays(2)->toDateString();
+            $dates = [$wednesday, $tuesday];
         } else { // Thursday and all other days -> yesterday
             $dates = [$base->copy()->subDay()->toDateString()];
         }
