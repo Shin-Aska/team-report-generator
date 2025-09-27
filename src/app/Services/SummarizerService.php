@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Http;
 class SummarizerService
 {
     // Two-step daily pipeline: daily1 -> daily2, using {concatenated_report_here}
-    public function summarizeDaily(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null): string
+    public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null): string
     {
         $concatenated = $this->concatenateEntries($entries, $user);
         // Step 1
@@ -20,7 +20,16 @@ class SummarizerService
         // Step 2
         $prompt2 = str_replace('{concatenated_report_here}', $first, $daily2Template);
         $second = $this->callGeminiText($prompt2) ?? $this->callOpenAIText($prompt2);
-        return $second ?: $first;
+
+        // Combine $first and $second where it is formatted where $first is the Summary and $second is the Briefdown
+        $output = "# Summary\n\n";
+        $output .= $first;
+        if ($second) {
+            $output .= "\n\n---\n\n";
+            $output .= "# Briefdown\n\n";
+            $output .= $second;
+        }
+        return $output;
     }
 
     public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate): string

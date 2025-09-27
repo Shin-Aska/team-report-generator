@@ -164,7 +164,7 @@ class DashboardController extends Controller
         // Keep the original requested/base date for labeling
         $date = $base->toDateString();
 
-        $markdown = $sum->summarizeDaily(
+        $markdown = $sum->summarizeStandup(
             $entries,
             $date,
             $prompts->getDaily1Template(),
