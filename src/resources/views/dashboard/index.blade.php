@@ -531,7 +531,12 @@
 </div>
 @endsection
 
+@push('head')
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+@endpush
+
 @push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script>
   const asUserInput = document.querySelector('#publishFormNew #as_user_id') || document.getElementById('as_user_id');
   const selfId = {{ auth()->id() }};
@@ -716,7 +721,20 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function(){ /* no-op for unified field */ });
+  document.addEventListener('DOMContentLoaded', function(){
+    const el = document.getElementById('contentField');
+    if (el && window.EasyMDE){
+      window.dailyMDE = new EasyMDE({
+        element: el,
+        autofocus: false,
+        spellChecker: false,
+        forceSync: true,
+        status: false,
+        placeholder: el.getAttribute('placeholder') || 'Write your update in Markdown...',
+        toolbar: ['bold','italic','heading','|','unordered-list','ordered-list','|','link','code','quote','table','|','preview','side-by-side','fullscreen','|','guide'],
+      });
+    }
+  });
 
   async function loadEntryFor(userId){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
@@ -725,8 +743,10 @@
       const res = await fetch(`{{ route('entries.fetch') }}?user_id=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       if(!res.ok) return;
       const data = await res.json();
-      const hidden = document.getElementById('contentField');
-      if (hidden) { hidden.value = data.found ? data.content : ''; }
+      const el = document.getElementById('contentField');
+      const content = data.found ? data.content : '';
+      if (window.dailyMDE) { window.dailyMDE.value(content); }
+      else if (el) { el.value = content; }
     } catch (e) {}
     finally { if (editorLoading) editorLoading.classList.add('d-none'); }
   }
