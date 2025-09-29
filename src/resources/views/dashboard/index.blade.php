@@ -542,6 +542,71 @@
   .toastui-editor-defaultUI { border-color: var(--bs-border-color-translucent, rgba(0,0,0,.125)); }
   .toastui-editor-defaultUI-toolbar { border-color: var(--bs-border-color-translucent, rgba(0,0,0,.125)); }
   .toastui-editor-contents { background: var(--bs-body-bg); color: var(--bs-body-color); }
+
+  /* Dark theme (Cyborg) adjustments */
+  html[data-theme-name="cyborg"] .toastui-editor-defaultUI {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-defaultUI-toolbar {
+    background: var(--bs-body-bg);
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-contents {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-ww-container .ProseMirror {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    caret-color: var(--bs-body-color);
+  }
+  /* Ensure all content text inherits light color */
+  html[data-theme-name="cyborg"] .toastui-editor-contents,
+  html[data-theme-name="cyborg"] .toastui-editor-contents * {
+    color: var(--bs-body-color) !important;
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-contents a { color: var(--bs-link-color) !important; }
+  /* Invert toolbar SVG icon sprite for dark background */
+  html[data-theme-name="cyborg"] .toastui-editor-defaultUI .toastui-editor-toolbar-icons {
+    filter: invert(1) hue-rotate(180deg);
+  }
+  /* Code blocks readability in dark */
+  html[data-theme-name="cyborg"] .toastui-editor-contents pre,
+  html[data-theme-name="cyborg"] .toastui-editor-contents code {
+    background: var(--bs-tertiary-bg, rgba(255,255,255,0.06));
+    color: var(--bs-body-color);
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-contents hr {
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-contents table,
+  html[data-theme-name="cyborg"] .toastui-editor-contents th,
+  html[data-theme-name="cyborg"] .toastui-editor-contents td {
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  /* Placeholder and popups */
+  html[data-theme-name="cyborg"] .toastui-editor-ww-container .ProseMirror p.is-empty::before {
+    color: rgba(255,255,255,0.55);
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-popup {
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-popup input,
+  html[data-theme-name="cyborg"] .toastui-editor-popup label {
+    color: var(--bs-body-color);
+  }
+  /* Toolbar separators and tabs */
+  html[data-theme-name="cyborg"] .toastui-editor-defaultUI .toastui-editor-toolbar-divider {
+    background-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
+  html[data-theme-name="cyborg"] .toastui-editor-mode-switch .tab-item { color: var(--bs-body-color); }
+  html[data-theme-name="cyborg"] .toastui-editor-mode-switch .tab-item.active {
+    border-color: var(--bs-border-color-translucent, rgba(255,255,255,0.2));
+  }
 </style>
 @endpush
 
