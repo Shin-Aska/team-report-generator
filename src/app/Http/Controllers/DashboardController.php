@@ -14,11 +14,12 @@ use App\Services\PromptService;
 use App\Services\SummarizerService;
 use App\Services\UserManager;
 use App\Services\DevopsWorkItemsService;
+use App\Services\BusProjectService;
 use Illuminate\Auth\Access\AuthorizationException;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request, DevopsWorkItemsService $ado)
+    public function index(Request $request, DevopsWorkItemsService $ado, BusProjectService $bus)
     {
         $date = $request->query('date', Carbon::now()->toDateString());
 
@@ -35,6 +36,7 @@ class DashboardController extends Controller
         $teamUsers = User::orderBy('name')->get();
 
         $adoSummary = $ado->getSummary();
+        $busProjects = $bus->getForMonth(Carbon::parse($date));
 
         return view('dashboard.index', [
             'date' => $date,
@@ -42,6 +44,7 @@ class DashboardController extends Controller
             'teamEntries' => $teamEntries,
             'teamUsers' => $teamUsers,
             'adoSummary' => $adoSummary,
+            'busProjects' => $busProjects,
         ]);
     }
 

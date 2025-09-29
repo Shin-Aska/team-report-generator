@@ -249,6 +249,58 @@
 <div class="row g-4 align-items-start">
   <!-- Left: My Daily Update -->
   <div class="col-12 col-lg-8">
+    <!-- Bus Projects card -->
+    <div class="page-card p-4 mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Bus Projects (This Month)</h5>
+        @if(auth()->user()->admin)
+          <button class="btn btn-sm btn-outline-primary" type="button" onclick="toggleAddBusProject()">Add</button>
+        @endif
+      </div>
+      @if(($busProjects ?? collect())->isEmpty())
+        <div class="text-muted small mb-2">No bus projects for this month.</div>
+      @else
+        <div class="list-group mb-2">
+          @foreach($busProjects as $p)
+            <div class="list-group-item d-flex align-items-center justify-content-between">
+              <div class="me-2">
+                <div class="fw-semibold">{{ $p->project_name }}</div>
+                @if(($p->project_description ?? '') !== '')
+                  <div class="text-muted small">{{ $p->project_description }}</div>
+                @endif
+              </div>
+              @if(auth()->user()->admin)
+                <form method="POST" action="{{ route('bus_project.destroy', $p) }}" onsubmit="return confirm('Remove this project from the bus?');">
+                  @csrf
+                  @method('DELETE')
+                  <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+                </form>
+              @endif
+            </div>
+          @endforeach
+        </div>
+      @endif
+
+      @if(auth()->user()->admin)
+        <div id="addBusProjectForm" class="mt-2 d-none">
+          <hr class="my-3"/>
+          <form method="POST" action="{{ route('bus_project.store') }}" class="row g-2">
+            @csrf
+            <div class="col-12 col-md-5">
+              <label class="form-label mb-1">Project Name</label>
+              <input type="text" class="form-control" name="project_name" required placeholder="Enter name">
+            </div>
+            <div class="col-12 col-md-7">
+              <label class="form-label mb-1">Description</label>
+              <input type="text" class="form-control" name="project_description" placeholder="Optional">
+            </div>
+            <div class="col-12 d-grid d-md-flex justify-content-md-end mt-2">
+              <button class="btn btn-primary" type="submit">Add Bus Project</button>
+            </div>
+          </form>
+        </div>
+      @endif
+    </div>
     <div class="page-card p-4">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h4 class="mb-0 fw-semibold">MY DAILY UPDATE FOR {{ \Illuminate\Support\Carbon::parse($date)->format('m/d/Y') }}</h4>
@@ -472,6 +524,11 @@
   }
   function hideLoading(){
     if (overlay){ overlay.classList.add('d-none'); }
+  }
+  function toggleAddBusProject(){
+    const form = document.getElementById('addBusProjectForm');
+    if (!form) return;
+    form.classList.toggle('d-none');
   }
   function setPostAs(id, name){
     asUserInput.value = id;

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LlmController;
+use App\Http\Controllers\BusProjectController;
 
 Route::redirect('/', '/login');
 
@@ -29,4 +30,8 @@ Route::middleware(['web','auth'])->group(function () {
     Route::post('/team/users', [DashboardController::class, 'storeUser'])->name('team.users.store');
     Route::put('/team/users/{user}', [DashboardController::class, 'updateUser'])->name('team.users.update');
     Route::delete('/team/users/{user}', [DashboardController::class, 'destroyUser'])->name('team.users.destroy');
+
+    // Bus Project management
+    Route::post('/bus-project', [BusProjectController::class, 'store'])->name('bus_project.store');
+    Route::delete('/bus-project/{project}', [BusProjectController::class, 'destroy'])->name('bus_project.destroy');
 });
