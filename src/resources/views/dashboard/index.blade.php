@@ -341,8 +341,8 @@
           <div id="editorLoadingNew" class="textarea-overlay d-none">
             <div class="spinner-border text-primary" role="status" aria-hidden="true"></div>
           </div>
-
-          <textarea id="contentField" name="content" class="form-control" rows="10" placeholder="Write your update in Markdown...">{{ old('content', $myEntry->content ?? '') }}</textarea>
+          <div id="richEditor"></div>
+          <textarea id="contentField" name="content" class="d-none">{{ old('content', $myEntry->content ?? '') }}</textarea>
         </div>
 
         <div class="text-muted small mb-2">
@@ -532,11 +532,21 @@
 @endsection
 
 @push('head')
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
+<style>
+  /* Ensure editor uses theme foreground color */
+  .toastui-editor-defaultUI { color: var(--bs-body-color); }
+  .toastui-editor-defaultUI .toastui-editor-toolbar-icons { color: var(--bs-body-color); }
+  #richEditor { min-height: 300px; }
+  /* Fit editor inside card without extra border clash */
+  .toastui-editor-defaultUI { border-color: var(--bs-border-color-translucent, rgba(0,0,0,.125)); }
+  .toastui-editor-defaultUI-toolbar { border-color: var(--bs-border-color-translucent, rgba(0,0,0,.125)); }
+  .toastui-editor-contents { background: var(--bs-body-bg); color: var(--bs-body-color); }
+</style>
 @endpush
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
 <script>
   const asUserInput = document.querySelector('#publishFormNew #as_user_id') || document.getElementById('as_user_id');
   const selfId = {{ auth()->id() }};
@@ -715,23 +725,29 @@
   if (publishFormNew){
     publishFormNew.addEventListener('submit', function(){
       const hidden = document.getElementById('contentField');
-      // Only compose if legacy section fields exist
-      const hasSections = document.getElementById('accomplishmentsField') || document.getElementById('planField') || document.getElementById('blockersField');
-      if (hidden && hasSections){ hidden.value = composeMarkdown(); }
+      if (hidden && window.tuiEditor){ hidden.value = window.tuiEditor.getMarkdown(); }
     });
   }
 
   document.addEventListener('DOMContentLoaded', function(){
-    const el = document.getElementById('contentField');
-    if (el && window.EasyMDE){
-      window.dailyMDE = new EasyMDE({
-        element: el,
-        autofocus: false,
-        spellChecker: false,
-        forceSync: true,
-        status: false,
-        placeholder: el.getAttribute('placeholder') || 'Write your update in Markdown...',
-        toolbar: ['bold','italic','heading','|','unordered-list','ordered-list','|','link','code','quote','table','|','preview','side-by-side','fullscreen','|','guide'],
+    const hidden = document.getElementById('contentField');
+    const el = document.getElementById('richEditor');
+    if (el && window.toastui && window.toastui.Editor){
+      window.tuiEditor = new window.toastui.Editor({
+        el: el,
+        height: '360px',
+        initialEditType: 'wysiwyg',
+        previewStyle: 'vertical',
+        usageStatistics: false,
+        toolbarItems: [
+          ['heading','bold','italic','strike'],
+          ['hr','quote'],
+          ['ul','ol','task'],
+          ['table','link'],
+          ['code','codeblock'],
+          ['scrollSync']
+        ],
+        initialValue: hidden ? hidden.value : ''
       });
     }
   });
@@ -743,10 +759,10 @@
       const res = await fetch(`{{ route('entries.fetch') }}?user_id=${encodeURIComponent(userId)}&date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       if(!res.ok) return;
       const data = await res.json();
-      const el = document.getElementById('contentField');
+      const hidden = document.getElementById('contentField');
       const content = data.found ? data.content : '';
-      if (window.dailyMDE) { window.dailyMDE.value(content); }
-      else if (el) { el.value = content; }
+      if (window.tuiEditor) { window.tuiEditor.setMarkdown(content || ''); }
+      if (hidden) { hidden.value = content; }
     } catch (e) {}
     finally { if (editorLoading) editorLoading.classList.add('d-none'); }
   }
