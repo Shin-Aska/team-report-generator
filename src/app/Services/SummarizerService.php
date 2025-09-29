@@ -4,6 +4,8 @@ namespace App\Services;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use App\Services\DevopsWorkItemsService;
+use App\Services\BusProjectService;
 
 class SummarizerService
 {
@@ -11,11 +13,31 @@ class SummarizerService
     public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null): string
     {
         $concatenated = $this->concatenateEntries($entries, $user);
+        // Inject bus projects context into the prompt (only extra block besides concatenated reports)
+        $busProjects = '';
+        try {
+            $base = null;
+            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            $busProjects = (new BusProjectService())->summarizeForPrompt($base);
+        } catch (\Throwable $e) {
+            $busProjects = 'No bus projects for this month.';
+        }
         // Step 1
         $prompt1 = str_replace('{concatenated_report_here}', $concatenated, $daily1Template);
+        if (str_contains($prompt1, '{bus_projects}')) {
+            $prompt1 = str_replace('{bus_projects}', $busProjects, $prompt1);
+        }
         $first = $this->callGeminiText($prompt1) ?? $this->callOpenAIText($prompt1);
         if (!$first) {
             return $this->fallbackDaily($entries, $date);
+        }
+        // Post-process Briefdown: inject current month; collect tickets for final output
+        $first = $this->injectMonth($first, $date);
+        try {
+            $adoSummary = (new DevopsWorkItemsService())->getSummary();
+            $ticketsTable = $this->buildTicketsMarkdownTable($adoSummary);
+        } catch (\Throwable $e) {
+            $ticketsTable = 'No ticket counts available.';
         }
         // Step 2
         $prompt2 = str_replace('{concatenated_report_here}', $first, $daily2Template);
@@ -29,6 +51,8 @@ class SummarizerService
             $output .= "# Briefdown\n\n";
             $output .= $first;
         }
+        // Append tickets table at the end
+        $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
         return $output;
     }
 
@@ -47,6 +71,29 @@ class SummarizerService
             $content = trim(preg_replace('/\s+/', ' ', $e['content']));
             $short = mb_substr($content, 0, 300);
             $lines[] = "- [{$date}] {$name}: {$short}";
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Build a Markdown table per area path for tickets.
+     */
+    protected function buildTicketsMarkdownTable(array $adoSummary): string
+    {
+        $counts = $adoSummary['counts'] ?? [];
+        if (!is_array($counts) || empty($counts)) {
+            return 'No ticket counts available.';
+        }
+        $lines = [];
+        foreach ($counts as $area => $stateCounts) {
+            $lines[] = 'Area Path: ' . $area;
+            $lines[] = '| State | Count |';
+            $lines[] = '|:------|------:|';
+            foreach ($stateCounts as $state => $count) {
+                $safeState = str_replace('|', '\\|', (string)$state);
+                $lines[] = '| ' . $safeState . ' | ' . (string)$count . ' |';
+            }
+            $lines[] = '';
         }
         return implode("\n", $lines);
     }
@@ -120,5 +167,60 @@ class SummarizerService
             }
         } catch (\Throwable $e) { }
         return null;
+    }
+
+    /**
+     * Build a human-readable tickets block for the prompt, based on DevopsWorkItemsService->getSummary() output.
+     */
+    protected function buildTicketsBlock(array $adoSummary): string
+    {
+        $counts = $adoSummary['counts'] ?? [];
+        if (!is_array($counts) || empty($counts)) {
+            return 'No ticket counts available.';
+        }
+
+        $lines = [];
+        foreach ($counts as $area => $stateCounts) {
+            $lines[] = "Area Path: " . $area;
+            $lines[] = "StateCount";
+            // Align simple columns for readability
+            $maxLen = 0;
+            foreach (array_keys($stateCounts) as $state) {
+                $maxLen = max($maxLen, mb_strlen((string)$state));
+            }
+            foreach ($stateCounts as $state => $count) {
+                $lines[] = str_pad((string)$state, $maxLen + 2) . (string)$count;
+            }
+            $lines[] = '';
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Replace placeholder month in the Briefdown header.
+     */
+    protected function injectMonth(string $text, string $date): string
+    {
+        try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+        $month = $base->format('F');
+        return str_replace('Goals for [Current Month] Bus:', 'Goals for ' . $month . ' Bus:', $text);
+    }
+
+    /**
+     * Ensure the Briefdown contains a Tickets section with the given content.
+     * If a Tickets section exists, replace it from its header to the end.
+     * Otherwise, append a new Tickets section at the end.
+     */
+    protected function injectTickets(string $text, string $tickets): string
+    {
+        $header = 'Tickets:';
+        $pos = mb_stripos($text, $header);
+        if ($pos !== false) {
+            // Replace from header to end
+            $prefix = mb_substr($text, 0, $pos);
+            return rtrim($prefix) . "\n\n" . $header . "\n" . trim($tickets) . "\n";
+        }
+        // Append at the end
+        return rtrim($text) . "\n\n" . $header . "\n" . trim($tickets) . "\n";
     }
 }
