@@ -33,6 +33,18 @@ class BusProjectService
     }
 
     /**
+     * Update an existing Bus Project.
+     */
+    public function update(BusProject $project, string $name, ?string $description = null): BusProject
+    {
+        $project->update([
+            'project_name' => $name,
+            'project_description' => (string) ($description ?? ''),
+        ]);
+        return $project;
+    }
+
+    /**
      * Remove a specific project.
      */
     public function remove(BusProject $project): bool

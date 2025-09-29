@@ -33,5 +33,6 @@ Route::middleware(['web','auth'])->group(function () {
 
     // Bus Project management
     Route::post('/bus-project', [BusProjectController::class, 'store'])->name('bus_project.store');
+    Route::put('/bus-project/{project}', [BusProjectController::class, 'update'])->name('bus_project.update');
     Route::delete('/bus-project/{project}', [BusProjectController::class, 'destroy'])->name('bus_project.destroy');
 });
