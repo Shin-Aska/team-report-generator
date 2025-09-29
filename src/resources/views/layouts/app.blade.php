@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $title ?? 'Report Generator' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
     <script>
         window.THEME_ASSETS = {
           sketch: "{{ asset('css/bootstrap-sketch-theme.css') }}",
@@ -81,6 +82,14 @@
         .loading-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 2000; }
         .loading-overlay.d-none { display: none !important; }
         .textarea-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); z-index: 10; }
+        /* Fix: prevent Bootstrap .table rules from breaking EasyMDE 'Insert table' toolbar button */
+        .EasyMDEContainer .editor-toolbar .table {
+          width: auto !important;
+          display: inline-block !important;
+          margin: 0 !important;
+          border: 0 !important;
+          background: transparent !important;
+        }
     </style>
     @stack('head')
 </head>
