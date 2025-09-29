@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'azure_devops' => [
+        'organization_url' => env('ORGANIZATION_URL', ''),
+        'pat' => env('PERSONAL_ACCESS_TOKEN', ''),
+        'project' => env('ADO_PROJECT'),
+        'api_version' => env('ADO_API_VERSION', '7.0'),
+        // Optional CSV strings; the service will parse to arrays
+        'area_paths' => env('ADO_AREA_PATHS'),
+        'work_item_types' => env('ADO_WORK_ITEM_TYPES'),
+        'status_blacklist' => env('ADO_STATUS_BLACKLIST'),
+    ],
+
 ];

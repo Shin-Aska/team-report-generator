@@ -13,11 +13,12 @@ use App\Models\User;
 use App\Services\PromptService;
 use App\Services\SummarizerService;
 use App\Services\UserManager;
+use App\Services\DevopsWorkItemsService;
 use Illuminate\Auth\Access\AuthorizationException;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, DevopsWorkItemsService $ado)
     {
         $date = $request->query('date', Carbon::now()->toDateString());
 
@@ -33,11 +34,14 @@ class DashboardController extends Controller
 
         $teamUsers = User::orderBy('name')->get();
 
+        $adoSummary = $ado->getSummary();
+
         return view('dashboard.index', [
             'date' => $date,
             'myEntry' => $myEntry,
             'teamEntries' => $teamEntries,
             'teamUsers' => $teamUsers,
+            'adoSummary' => $adoSummary,
         ]);
     }
 

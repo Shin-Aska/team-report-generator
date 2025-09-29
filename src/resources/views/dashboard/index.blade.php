@@ -390,6 +390,66 @@
       </div>
 
     </div>
+    <!-- Azure DevOps Work Items -->
+    <div class="page-card p-4 mt-4">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h5 class="mb-0">Azure DevOps Work Items</h5>
+      </div>
+      @php
+        $adoError = $adoSummary['error'] ?? null;
+        $adoCounts = $adoSummary['counts'] ?? [];
+        $adoOrg = $adoSummary['organization_url'] ?? '';
+        $adoProject = $adoSummary['project'] ?? null;
+      @endphp
+      @if($adoError)
+        <div class="alert alert-warning">
+          <div class="fw-semibold">Not available</div>
+          <div class="small">{{ $adoError }}</div>
+        </div>
+      @else
+        @if(empty($adoCounts))
+          <div class="text-muted small">No matching work items for the configured area path(s).</div>
+        @else
+          @if($adoOrg)
+            <div class="small text-muted mb-2">
+              <span>Org:</span>
+              <a href="{{ $adoOrg }}" target="_blank" rel="noopener">{{ $adoOrg }}</a>
+              @if($adoProject)
+                <span class="ms-2">Project:</span>
+                <span class="fw-semibold">{{ $adoProject }}</span>
+              @endif
+            </div>
+          @endif
+          @foreach($adoCounts as $area => $counts)
+            <div class="mb-3">
+              <div class="fw-semibold mb-1">Area Path: {{ $area }}</div>
+              @if(empty($counts))
+                <div class="text-muted small">No non-blacklisted states</div>
+              @else
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th style="width:70%">State</th>
+                        <th class="text-end" style="width:30%">Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($counts as $state => $count)
+                      <tr>
+                        <td>{{ $state }}</td>
+                        <td class="text-end">{{ (int) $count }}</td>
+                      </tr>
+                    @endforeach
+                    </tbody>
+                  </table>
+                </div>
+              @endif
+            </div>
+          @endforeach
+        @endif
+      @endif
+    </div>
   </div>
 </div>
 @endsection
