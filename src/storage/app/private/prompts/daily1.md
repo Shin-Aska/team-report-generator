@@ -24,15 +24,6 @@ Initiatives:
 Others:
 - Summarize work and notes not covered by the bus or the named initiatives.
 
-Tickets:
-Area Path: iPMC\\Workflow and AI
-StateCount
-In Progress      X
-In Review        X
-In Test          X
-Ready for Test   X
-To be merged     X
-To be released   X
 ```
 
 RULES AND GUIDANCE:
@@ -41,7 +32,6 @@ RULES AND GUIDANCE:
   - Delayed: slower progress than expected, pending reviews/feedback causing slippage.
   - Stalled/Blocked: explicit blockers or dependencies preventing forward movement.
 - “Initiatives” list is a guide; include only those that have updates. If an initiative has no signal, you may omit it or note “No notable updates.” For each initiative that has updates, include a short indented paragraph describing movement.
-- If ticket data is unavailable, say “No ticket counts available.” Do not invent numbers.
 
 INPUT REPORTS:
 ```markdown
