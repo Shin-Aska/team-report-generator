@@ -33,6 +33,16 @@ class SummarizerService
         }
         // Post-process Briefdown: inject current month; collect tickets for final output
         $first = $this->injectMonth($first, $date);
+
+        // If LLM output is wrapped in ```markdown, remove it
+        if (str_starts_with($first, '```markdown') && str_ends_with($first, '```')) {
+            $first = substr($first, strlen('```markdown'), -strlen('```'));
+        }
+        // Also if it is wrapped by code quotes, remove it
+        if (str_starts_with($first, '```') && str_ends_with($first, '```')) {
+            $first = substr($first, strlen('```'), -strlen('```'));
+        }
+
         try {
             $adoSummary = (new DevopsWorkItemsService())->getSummary();
             $ticketsTable = $this->buildTicketsMarkdownTable($adoSummary);
