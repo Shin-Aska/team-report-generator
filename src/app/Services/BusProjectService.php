@@ -13,10 +13,7 @@ class BusProjectService
     public function getForMonth(?Carbon $base = null)
     {
         $base = $base ? $base->copy() : Carbon::now();
-        $start = $base->copy()->startOfMonth();
-        $end = $base->copy()->endOfMonth();
         return BusProject::query()
-            ->whereBetween('created_at', [$start, $end])
             ->orderByDesc('id')
             ->get();
     }
