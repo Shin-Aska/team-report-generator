@@ -253,9 +253,7 @@
     <div class="page-card p-4 mb-4">
       <div class="d-flex align-items-center justify-content-between mb-2">
         <h5 class="mb-0">Bus Projects (This Month)</h5>
-        @if(auth()->user()->admin)
-          <button class="btn btn-sm btn-outline-primary" type="button" onclick="toggleAddBusProject()">Add</button>
-        @endif
+        <button class="btn btn-sm btn-outline-primary" type="button" onclick="toggleAddBusProject()">Add</button>
       </div>
       @if(($busProjects ?? collect())->isEmpty())
         <div class="text-muted small mb-2">No bus projects for this month.</div>
@@ -270,61 +268,60 @@
                     <div class="text-muted small">{{ $p->project_description }}</div>
                   @endif
                 </div>
-                @if(auth()->user()->admin)
-                  <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="toggleEditBusProject({{ $p->id }})">Edit</button>
-                    <form method="POST" action="{{ route('bus_project.destroy', $p) }}" onsubmit="return confirm('Remove this project from the bus?');" class="m-0">
-                      @csrf
-                      @method('DELETE')
-                      <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
-                    </form>
-                  </div>
-                @endif
-              </div>
-              @if(auth()->user()->admin)
-                <div id="editBusProjectForm-{{ $p->id }}" class="mt-2 d-none">
-                  <form method="POST" action="{{ route('bus_project.update', $p) }}" class="row g-2">
+
+                <div class="d-flex align-items-center gap-2">
+                  <button class="btn btn-sm btn-outline-secondary" type="button" onclick="toggleEditBusProject({{ $p->id }})">Edit</button>
+                  <form method="POST" action="{{ route('bus_project.destroy', $p) }}" onsubmit="return confirm('Remove this project from the bus?');" class="m-0">
                     @csrf
-                    @method('PUT')
-                    <div class="col-12 col-md-5">
-                      <label class="form-label mb-1">Project Name</label>
-                      <input type="text" class="form-control" name="project_name" value="{{ $p->project_name }}" required>
-                    </div>
-                    <div class="col-12 col-md-7">
-                      <label class="form-label mb-1">Description</label>
-                      <input type="text" class="form-control" name="project_description" value="{{ $p->project_description }}">
-                    </div>
-                    <div class="col-12 d-grid d-md-flex justify-content-md-end mt-2 gap-2">
-                      <button class="btn btn-primary" type="submit">Save</button>
-                      <button class="btn btn-outline-secondary" type="button" onclick="toggleEditBusProject({{ $p->id }})">Cancel</button>
-                    </div>
+                    @method('DELETE')
+                    <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
                   </form>
                 </div>
-              @endif
+
+              </div>
+
+              <div id="editBusProjectForm-{{ $p->id }}" class="mt-2 d-none">
+                <form method="POST" action="{{ route('bus_project.update', $p) }}" class="row g-2">
+                  @csrf
+                  @method('PUT')
+                  <div class="col-12 col-md-5">
+                    <label class="form-label mb-1">Project Name</label>
+                    <input type="text" class="form-control" name="project_name" value="{{ $p->project_name }}" required>
+                  </div>
+                  <div class="col-12 col-md-7">
+                    <label class="form-label mb-1">Description</label>
+                    <input type="text" class="form-control" name="project_description" value="{{ $p->project_description }}">
+                  </div>
+                  <div class="col-12 d-grid d-md-flex justify-content-md-end mt-2 gap-2">
+                    <button class="btn btn-primary" type="submit">Save</button>
+                    <button class="btn btn-outline-secondary" type="button" onclick="toggleEditBusProject({{ $p->id }})">Cancel</button>
+                  </div>
+                </form>
+              </div>
+
             </div>
           @endforeach
         </div>
       @endif
 
-      @if(auth()->user()->admin)
-        <div id="addBusProjectForm" class="mt-2 d-none">
-          <hr class="my-3"/>
-          <form method="POST" action="{{ route('bus_project.store') }}" class="row g-2">
-            @csrf
-            <div class="col-12 col-md-5">
-              <label class="form-label mb-1">Project Name</label>
-              <input type="text" class="form-control" name="project_name" required placeholder="Enter name">
-            </div>
-            <div class="col-12 col-md-7">
-              <label class="form-label mb-1">Description</label>
-              <input type="text" class="form-control" name="project_description" placeholder="Optional">
-            </div>
-            <div class="col-12 d-grid d-md-flex justify-content-md-end mt-2">
-              <button class="btn btn-primary" type="submit">Add Bus Project</button>
-            </div>
-          </form>
-        </div>
-      @endif
+      <div id="addBusProjectForm" class="mt-2 d-none">
+        <hr class="my-3"/>
+        <form method="POST" action="{{ route('bus_project.store') }}" class="row g-2">
+          @csrf
+          <div class="col-12 col-md-5">
+            <label class="form-label mb-1">Project Name</label>
+            <input type="text" class="form-control" name="project_name" required placeholder="Enter name">
+          </div>
+          <div class="col-12 col-md-7">
+            <label class="form-label mb-1">Description</label>
+            <input type="text" class="form-control" name="project_description" placeholder="Optional">
+          </div>
+          <div class="col-12 d-grid d-md-flex justify-content-md-end mt-2">
+            <button class="btn btn-primary" type="submit">Add Bus Project</button>
+          </div>
+        </form>
+      </div>
+
     </div>
     <div class="page-card p-4">
       <div class="d-flex align-items-center justify-content-between mb-3">
