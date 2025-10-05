@@ -136,7 +136,10 @@ class DashboardController extends Controller
 
         // Determine which dates to include
         $dates = [];
-        if ($iso === 2) { // Tuesday -> Monday and last Friday
+        if ($iso === 1) { // Monday -> previous Friday
+            $dates = [$base->copy()->subDays(3)->toDateString()];
+        }
+        else if ($iso === 2) { // Tuesday -> Monday and last Friday
             $monday = $base->copy()->subDay()->toDateString();
             $lastFriday = $base->copy()->startOfWeek(Carbon::MONDAY)->subDays(3)->toDateString();
             $dates = [$monday, $lastFriday];
