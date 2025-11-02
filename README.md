@@ -140,25 +140,9 @@ Visit http://127.0.0.1:8000 and log in with a seeded user.
 - LLM proxy (CORS-enabled)
     - `POST /llm` — forwards JSON payload to Gemini using `GEMINI_API_KEY`
 
-## Prompt pipeline
+## Maintenance & operations
 
-Prompts live at `reportgen/storage/app/prompts/` and contain the placeholder `{concatenated_report_here}`.
-
-- Daily summary: concatenates all entries for the selected date and runs a 2-step pipeline:
-    1) `daily1.md` with `{concatenated_report_here}` replaced
-    2) The result of step 1 is injected as `{concatenated_report_here}` into `daily2.md`
-
-- Weekly summary: concatenates all entries in the date range and applies `weekly.md` with the placeholder replaced.
-
-## Admin role
-
-A new `admin` boolean column is added to `users`. Admins can add/remove/edit other users. Non-admins can edit only their own profile and cannot manage others.
-
-## Troubleshooting
-
-- If you change `.env`, run `php artisan config:clear`.
-- If migrations complain about existing tables, the migrations are guarded, but you can still inspect `database/migrations/` and re-run: `php artisan migrate:fresh --seed` (will wipe data).
-- Ensure your DB credentials are correct and the DB is reachable.
+For day-to-day upkeep, refer to [docs/MAINTENANCE.md](docs/MAINTENANCE.md). It consolidates configuration cache management, migrations, scheduler/queue supervision, prompt upkeep, admin role practices, troubleshooting checklists, and upgrade workflows originally captured here and in `src/README.md`.
 
 ## License
 

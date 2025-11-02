@@ -63,4 +63,14 @@
 - After saving changes, regenerate a report to confirm the updated tone matches expectations.
 - `public/` — public assets and Vite build output.
 
+## 5. Prompt pipeline
+
+Prompts live at `reportgen/storage/app/prompts/` and contain the placeholder `{concatenated_report_here}`.
+
+- Daily summary: concatenates all entries for the selected date and runs a 2-step pipeline:
+    1) `daily1.md` with `{concatenated_report_here}` replaced
+    2) The result of step 1 is injected as `{concatenated_report_here}` into `daily2.md`
+
+- Weekly summary: concatenates all entries in the date range and applies `weekly.md` with the placeholder replaced.
+
 Refer to the repository root README for deployment strategies, contribution guidelines, and any additional project-wide documentation.
