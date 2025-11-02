@@ -1,5 +1,8 @@
 # Report Generator Server
 
+![GitHub](https://img.shields.io/github/license/Shin-Aska/team-report-generator)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/Shin-Aska/team-report-generator)
+
 ![Report Generator dashboard preview](docs/preview.png)
 
 A Laravel-based team status reporting application. It helps teams capture daily updates, compile weekly summaries, and share consolidated reports quickly. The core web app lives in `reportgen/` and provides:
