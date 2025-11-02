@@ -9,6 +9,8 @@ This project is a Laravel application (located in `src/`) that builds its public
 
 The sections below walk through a typical shared hosting workflow for both Apache-based plans and Windows/IIS plans that offer PHP support.
 
+> ℹ️ Always confirm platform-specific steps with your hosting provider—they can clarify document root paths, PHP modules, and deployment policies unique to their environment.
+
 ---
 
 ## Requirements
@@ -146,6 +148,62 @@ For hosts built around ASP.NET/IIS but offering PHP, keep the project structure 
 ```
 
 If your host cannot reference directories above the site root, place `public` at the root of the site (similar to the Apache option above) and adjust the `index.php` paths to reach your `vendor` and `bootstrap` directories.
+
+---
+
+## Dedicated / VPS / Cloud hosting
+
+When you control the full server (or VM/container), you can follow standard Laravel production practices:
+
+1. **Provision the stack**
+   - Install PHP 8.2+ (with OPcache) and required extensions (`pdo_mysql`, `mbstring`, etc.).
+   - Install a web server such as Nginx or Apache. For Nginx, proxy traffic to PHP-FPM; for Apache, enable `mod_proxy_fcgi` or `mod_php`.
+   - Install and secure MySQL/MariaDB. Consider managed database services if available.
+
+2. **Deploy the code**
+   - Clone the repository or use CI/CD to publish the `src/` directory to `/var/www/report-generator` (or similar).
+   - Run `composer install --no-dev --optimize-autoloader` and `npm run build` on the server or as part of your pipeline.
+   - Set the web root of your virtual host to `.../src/public`. Sample Nginx server block:
+     ```nginx
+     server {
+         server_name your-domain.com;
+         root /var/www/report-generator/src/public;
+         index index.php;
+
+         location / {
+             try_files $uri $uri/ /index.php?$query_string;
+         }
+
+         location ~ \.php$ {
+             fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+             include fastcgi_params;
+             fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+         }
+     }
+     ```
+
+3. **Environment and secrets management**
+   - Populate `src/.env` manually or inject environment variables through your process manager/CI secrets.
+   - Run `php artisan key:generate` once and store the key securely.
+
+4. **Permissions and ownership**
+   - Ensure the web server user (e.g., `www-data`) owns or has write access to `storage/` and `bootstrap/cache/`.
+   - Use POSIX ACLs or `chown`/`chmod` to prevent overly permissive settings while keeping deploy automation functional.
+
+5. **Process supervision**
+   - Configure a cron entry for `php artisan schedule:run` every minute.
+   - Use `supervisor`, `systemd`, or `pm2` to run `php artisan queue:work` continuously if you rely on queues.
+
+6. **Security and hardening**
+   - Enforce HTTPS (Let’s Encrypt certificates via Certbot or your provider’s tooling).
+   - Enable firewalls (UFW, security groups) and restrict database access to trusted hosts.
+   - Keep system packages, PHP, and Composer dependencies patched.
+
+7. **Observability**
+   - Capture logs with centralized logging (journalctl, CloudWatch, etc.).
+   - Monitor application health via uptime checks or APM tools.
+
+Even with full control, your hosting provider or infrastructure platform may have specific guidelines for backups, firewall rules, or load balancers—consult their documentation to avoid conflicts.
 
 ---
 

@@ -1,5 +1,7 @@
 # Report Generator Server
 
+![Report Generator dashboard preview](src/preview.png)
+
 A Laravel-based team status reporting application. It helps teams capture daily updates, compile weekly summaries, and share consolidated reports quickly. The core web app lives in `reportgen/` and provides:
 
 - Post daily status entries (Markdown) per user and date
@@ -14,9 +16,7 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 
 - `src/` — the Laravel 12 application (PHP 8.2) containing app code, Composer dependencies, and public assets
 - `src/README.md` — detailed developer guide with setup steps, environment configuration, and directory structure explanations
-- `docs/` — supplementary documentation, including `HOSTING.md` (shared hosting guide) and `prototype.epgz` (Pencil wireframes for early UI prototypes; open with [Pencil](https://pencil.evolus.vn/))
-
-> Earlier references to `reportgen/` or `llm.php` are obsolete; the application now lives entirely under `src/`.
+- `docs/` — supplementary documentation, including `HOSTING.md` (shared hosting guide), `TEAM_STRUCTURE.md` (operational cadence defaults), `MULTI_TEAM_SETUP.md` (multi-team deployment model), and `prototype.epgz` (Pencil wireframes; open with [Pencil](https://pencil.evolus.vn/))
 
 ## Requirements
 
@@ -26,6 +26,11 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 - Node.js 18+ and npm (optional, for Vite/dev UX)
 
 Typical PHP extensions for Laravel should be installed (openssl, pdo, mbstring, tokenizer, xml, ctype, json, fileinfo).
+
+## Additional operational docs
+
+- [Team Structure & Reporting Cadence](docs/TEAM_STRUCTURE.md) — documents the monthly "bus" project rhythm, daily standup expectations, and Azure DevOps variables required to enrich reports, including the `ORGANIZATION_URL`, `PERSONAL_ACCESS_TOKEN`, `ADO_PROJECT`, and `ADO_API_VERSION` settings now found in `.env.example`.
+- [Multi-Team Deployment Guide](docs/MULTI_TEAM_SETUP.md) — explains the duplicated-`src` architecture used to isolate each team with its own database, directory layout, and maintenance workflow.
 
 ## Quick start
 
