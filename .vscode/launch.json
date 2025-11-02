@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "PHP Artisan Serve",
+            "type": "php",
+            "request": "launch",
+            "runtimeExecutable": "php",
+            "program": "${workspaceFolder}/src/artisan",
+            "cwd": "${workspaceFolder}/src",
+            "args": [
+                "serve",
+                "--host=127.0.0.1",
+                "--port=8000"
+            ]
+        }
+    ]
+}
