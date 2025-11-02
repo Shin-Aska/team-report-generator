@@ -12,8 +12,11 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 
 ## Repository layout
 
-- `reportgen/` — the Laravel 12 application (PHP 8.2)
-- `llm.php` — legacy LLM script (the app now uses `LlmController`, but this file may remain for reference)
+- `src/` — the Laravel 12 application (PHP 8.2) containing app code, Composer dependencies, and public assets
+- `src/README.md` — detailed developer guide with setup steps, environment configuration, and directory structure explanations
+- `docs/` — supplementary documentation, including `HOSTING.md` (shared hosting guide) and `prototype.epgz` (Pencil wireframes for early UI prototypes; open with [Pencil](https://pencil.evolus.vn/))
+
+> Earlier references to `reportgen/` or `llm.php` are obsolete; the application now lives entirely under `src/`.
 
 ## Requirements
 

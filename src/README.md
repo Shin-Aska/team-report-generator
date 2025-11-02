@@ -53,7 +53,14 @@
 - `app/View/Components/` & `resources/views/` — Blade templates and UI components.
 - `routes/` — HTTP routes (`web.php`, `api.php`, etc.).
 - `database/` — migrations, seeders, and factories.
-- `storage/app/prompts/` — Markdown templates used for daily and weekly summaries.
+- `storage/app/private/prompts/` — Markdown templates used for daily and weekly summaries.
+
+## 4. Customizing report prompts
+
+- The prompt templates that steer the tone and structure of generated reports live in `storage/app/private/prompts/`.
+- Edit the Markdown files directly (for example, `weekly.md` or `daily.md`) to adjust wording, emphasis, or guidance for the LLM.
+- Keep the YAML front matter (if present) intact; only modify the Markdown body unless you know the consuming code expects new metadata.
+- After saving changes, regenerate a report to confirm the updated tone matches expectations.
 - `public/` — public assets and Vite build output.
 
 Refer to the repository root README for deployment strategies, contribution guidelines, and any additional project-wide documentation.
