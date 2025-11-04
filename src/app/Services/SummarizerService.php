@@ -22,8 +22,21 @@ class SummarizerService
         } catch (\Throwable $e) {
             $busProjects = 'No bus projects for this month.';
         }
+
+        $busyEntryProject = '';
+        try {
+            $base = null;
+            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            $busyEntryProject = (new BusProjectService())->getPreparedTemplate($base);
+        } catch(\Throwable $e) {
+            $busyEntryProject = '- No bus projects for this month.';
+        }
+
         // Step 1
         $prompt1 = str_replace('{concatenated_report_here}', $concatenated, $daily1Template);
+        if (str_contains($prompt1, '{bus_entries}')) {
+            $prompt1 = str_replace('{bus_entries}', $busyEntryProject, $prompt1);
+        }
         if (str_contains($prompt1, '{bus_projects}')) {
             $prompt1 = str_replace('{bus_projects}', $busProjects, $prompt1);
         }

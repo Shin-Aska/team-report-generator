@@ -65,4 +65,24 @@ class BusProjectService
         })->all();
         return implode("\n", $lines);
     }
+
+    public function getPreparedTemplate(?Carbon $base = null): string
+    {
+        $list = $this->getForMonth($base);
+        if ($list->isEmpty()) {
+            return 'No bus projects for this month.';
+        }
+
+        // Build a checklist-style template for each project
+        $lines = $list->map(function($p){
+            $name = trim($p->project_name ?? '');
+            return "- {$name} - On track, Delayed, Stalled/Blocked (low risk | medium risk | high risk)";
+        })->all();
+
+        // Add one general instruction about providing a reason when not on track
+        $lines[] = '';
+        $lines[] = "Note: If a project is not 'On track', briefly state the reason inferred from updates/blockers.";
+
+        return implode("\n", $lines);
+    }
 }

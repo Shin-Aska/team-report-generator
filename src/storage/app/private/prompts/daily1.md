@@ -10,9 +10,7 @@ OUTPUT FORMAT (use these exact sections and order):
 
 ```markdown
 Goals for [Current Month] Bus:
-- Expression Agent - On track, Delayed, Stalled/Blocked (low risk | medium risk | high risk)
-  - If not On track, add a short reason inferred from updates/blockers.
-- Workflow 2.0 - On track, Delayed, Stalled/Blocked (low risk | medium risk | high risk)
+{bus_entries}
 
 Initiatives:
 - Initiative1
