@@ -1,5 +1,10 @@
 # Report Generator Server
 
+![GitHub](https://img.shields.io/github/license/Shin-Aska/team-report-generator)
+![GitHub release (latest SemVer)](https://img.shields.io/github/v/release/Shin-Aska/team-report-generator)
+
+![Report Generator dashboard preview](docs/preview.png)
+
 A Laravel-based team status reporting application. It helps teams capture daily updates, compile weekly summaries, and share consolidated reports quickly. The core web app lives in `reportgen/` and provides:
 
 - Post daily status entries (Markdown) per user and date
@@ -12,8 +17,9 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 
 ## Repository layout
 
-- `reportgen/` — the Laravel 12 application (PHP 8.2)
-- `llm.php` — legacy LLM script (the app now uses `LlmController`, but this file may remain for reference)
+- `src/` — the Laravel 12 application (PHP 8.2) containing app code, Composer dependencies, and public assets
+- `src/README.md` — detailed developer guide with setup steps, environment configuration, and directory structure explanations
+- `docs/` — supplementary documentation, including `HOSTING.md` (shared hosting guide), `TEAM_STRUCTURE.md` (operational cadence defaults), `MULTI_TEAM_SETUP.md` (multi-team deployment model), and `prototype.epgz` (Pencil wireframes; open with [Pencil](https://pencil.evolus.vn/))
 
 ## Requirements
 
@@ -23,6 +29,11 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 - Node.js 18+ and npm (optional, for Vite/dev UX)
 
 Typical PHP extensions for Laravel should be installed (openssl, pdo, mbstring, tokenizer, xml, ctype, json, fileinfo).
+
+## Additional operational docs
+
+- [Team Structure & Reporting Cadence](docs/TEAM_STRUCTURE.md) — documents the monthly "bus" project rhythm, daily standup expectations, and Azure DevOps variables required to enrich reports, including the `ORGANIZATION_URL`, `PERSONAL_ACCESS_TOKEN`, `ADO_PROJECT`, and `ADO_API_VERSION` settings now found in `.env.example`.
+- [Multi-Team Deployment Guide](docs/MULTI_TEAM_SETUP.md) — explains the duplicated-`src` architecture used to isolate each team with its own database, directory layout, and maintenance workflow.
 
 ## Quick start
 
@@ -132,25 +143,9 @@ Visit http://127.0.0.1:8000 and log in with a seeded user.
 - LLM proxy (CORS-enabled)
     - `POST /llm` — forwards JSON payload to Gemini using `GEMINI_API_KEY`
 
-## Prompt pipeline
+## Maintenance & operations
 
-Prompts live at `reportgen/storage/app/prompts/` and contain the placeholder `{concatenated_report_here}`.
-
-- Daily summary: concatenates all entries for the selected date and runs a 2-step pipeline:
-    1) `daily1.md` with `{concatenated_report_here}` replaced
-    2) The result of step 1 is injected as `{concatenated_report_here}` into `daily2.md`
-
-- Weekly summary: concatenates all entries in the date range and applies `weekly.md` with the placeholder replaced.
-
-## Admin role
-
-A new `admin` boolean column is added to `users`. Admins can add/remove/edit other users. Non-admins can edit only their own profile and cannot manage others.
-
-## Troubleshooting
-
-- If you change `.env`, run `php artisan config:clear`.
-- If migrations complain about existing tables, the migrations are guarded, but you can still inspect `database/migrations/` and re-run: `php artisan migrate:fresh --seed` (will wipe data).
-- Ensure your DB credentials are correct and the DB is reachable.
+For day-to-day upkeep, refer to [docs/MAINTENANCE.md](docs/MAINTENANCE.md). It consolidates configuration cache management, migrations, scheduler/queue supervision, prompt upkeep, admin role practices, troubleshooting checklists, and upgrade workflows originally captured here and in `src/README.md`.
 
 ## License
 
