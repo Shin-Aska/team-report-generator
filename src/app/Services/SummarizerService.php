@@ -107,7 +107,7 @@ class SummarizerService
     protected function resolveEnginePreference(?string $engine): array
     {
         $normalized = $engine ? strtolower(trim($engine)) : null;
-        $engines = ['azure', 'openai', 'gemini'];
+        $engines = ['azure', 'openai', 'gemini', 'mistral'];
         if ($normalized && in_array($normalized, $engines, true)) {
             $order = array_merge([$normalized], array_values(array_diff($engines, [$normalized])));
         } else {
@@ -126,6 +126,7 @@ class SummarizerService
                 'azure' => $this->callAzureFoundryAIText($text),
                 'openai' => $this->callOpenAIText($text),
                 'gemini' => $this->callGeminiText($text),
+                'mistral' => $this->callMistralText($text),
                 default => null,
             };
             if ($result) {
@@ -254,39 +255,41 @@ class SummarizerService
                     return $content;
                 }
             }
-        } catch (
-            \Throwable $e
-        ) {
+        } catch (\Throwable $e) {
+            // Handle the exception
         }
 
         return null;
     }
 
-    /**
-     * Build a human-readable tickets block for the prompt, based on DevopsWorkItemsService->getSummary() output.
-     */
-    protected function buildTicketsBlock(array $adoSummary): string
+    protected function callMistralText(string $text): ?string
     {
-        $counts = $adoSummary['counts'] ?? [];
-        if (!is_array($counts) || empty($counts)) {
-            return 'No ticket counts available.';
+        $key = env('MISTRAL_API_KEY');
+        if (!$key) {
+            return null;
         }
 
-        $lines = [];
-        foreach ($counts as $area => $stateCounts) {
-            $lines[] = "Area Path: " . $area;
-            $lines[] = "StateCount";
-            // Align simple columns for readability
-            $maxLen = 0;
-            foreach (array_keys($stateCounts) as $state) {
-                $maxLen = max($maxLen, mb_strlen((string)$state));
+        try {
+            $resp = Http::withToken($key)
+                ->timeout(30)
+                ->asJson()
+                ->post('https://api.mistral.ai/v1/chat/completions', [
+                    'model' => env('MISTRAL_MODEL', 'mistral-large-latest'),
+                    'messages' => [
+                        ['role' => 'user', 'content' => $text],
+                    ],
+                ]);
+
+            if ($resp->successful()) {
+                $content = $resp->json('choices.0.message.content');
+                if (is_string($content)) {
+                    return $content;
+                }
             }
-            foreach ($stateCounts as $state => $count) {
-                $lines[] = str_pad((string)$state, $maxLen + 2) . (string)$count;
-            }
-            $lines[] = '';
+        } catch (\Throwable $e) {
         }
-        return implode("\n", $lines);
+
+        return null;
     }
 
     /**

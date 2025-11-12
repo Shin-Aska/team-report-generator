@@ -264,6 +264,9 @@ class DashboardController extends Controller
         if (env('GEMINI_API_KEY')) {
             $engines['gemini'] = 'Gemini';
         }
+        if (env('MISTRAL_API_KEY')) {
+            $engines['mistral'] = 'Mistral';
+        }
         return $engines;
     }
 
