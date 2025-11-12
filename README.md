@@ -68,12 +68,23 @@ Copy `.env.example` to `.env` (if needed) and set the following:
  DB_USERNAME=root
  DB_PASSWORD=
  
- # LLM configuration
+ # LLM configuration (If more than one provided, a dropdown in the interface will appear)
+
+ # Gemini
  GEMINI_API_KEY=your_gemini_key
  GEMINI_MODEL=gemini-2.5-flash-preview-05-20
- # Optional fallbacks
+
+ # OpenAI
  OPENAI_API_KEY=
- OPENAI_MODEL=gpt-4o-mini
+ OPENAI_MODEL=gpt-4.1 # Defaults to 4.1
+
+ # Azure API key for /llm proxy
+ AZURE_ENDPOINT=your_endpoint
+ AZURE_API_KEY=your_key_here
+ AZURE_AI_MODEL=gpt-4.1 # Defaults to 4.1
+
+ # Mistral API Key
+ MISTRAL_API_KEY=your_key_here
  
  # CORS allowlist for the /llm proxy (comma-separated; supports wildcards)
  LLM_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
