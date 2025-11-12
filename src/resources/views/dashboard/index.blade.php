@@ -155,7 +155,7 @@
           <div class="markdown-preview" id="reportHtml"></div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary" id="copyBtn" type="button">Copy Markdown</button>
+          <button class="btn btn-outline-primary" id="copyBtn" type="button">Copy Markdown</button>
           <button class="btn btn-primary" data-bs-dismiss="modal" type="button">Close</button>
         </div>
       </div>
@@ -345,9 +345,10 @@
         <div class="text-muted small mb-2">
           Posting as:
           <span class="badge bg-info text-dark" id="postAsName">{{ auth()->user()->name }} (You)</span>
-          <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="resetPostAs()">Post as me</button>
+          <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="resetPostAs()">Post as me</button>
         </div>
-        <div class="d-flex justify-content-end">
+        <div class="d-flex justify-content-end gap-2 flex-wrap">
+          <button type="button" class="btn btn-outline-primary" id="copyPreviousUpdateBtn" title="Copy update from {{ $previousEntryLabel }}">Copy My Previous Update</button>
           <button class="btn btn-primary">Submit My Update</button>
         </div>
       </form>
@@ -405,7 +406,7 @@
         <label class="form-label mb-1">Date:</label>
         <form id="sideDateForm" method="GET" action="{{ route('dashboard') }}" class="input-group">
           <input type="date" name="date" class="form-control" value="{{ $date }}" onchange="document.getElementById('sideDateForm').submit()"/>
-          <a class="btn btn-outline-secondary" href="{{ route('dashboard') }}" title="Today">Today</a>
+          <a class="btn btn-outline-primary" href="{{ route('dashboard') }}" title="Today">Today</a>
         </form>
       </div>
 
@@ -616,6 +617,45 @@
   const overlay = document.getElementById('loadingOverlay');
   const modalHeader = document.querySelector('#reportModal .modal-header');
   const editorLoading = document.getElementById('editorLoadingNew') || document.getElementById('editorLoading');
+  const previousEntryData = @json($previousEntryData);
+
+  const copyPrevBtn = document.getElementById('copyPreviousUpdateBtn');
+  if (copyPrevBtn){
+    if (!previousEntryData.hasEntry || !previousEntryData.content){
+      copyPrevBtn.disabled = true;
+      copyPrevBtn.classList.add('disabled');
+      copyPrevBtn.setAttribute('aria-disabled', 'true');
+      if (!copyPrevBtn.getAttribute('title') && previousEntryData.label){
+        copyPrevBtn.setAttribute('title', `No update available for ${previousEntryData.label}`);
+      }
+    } else {
+      copyPrevBtn.dataset.originalText = copyPrevBtn.textContent;
+      copyPrevBtn.addEventListener('click', function(){
+        const content = previousEntryData.content || '';
+        const hidden = document.getElementById('contentField');
+        const legacyTextarea = document.querySelector('#publishForm textarea[name="content"]');
+
+        if (window.tuiEditor) {
+          window.tuiEditor.setMarkdown(content);
+        }
+        if (hidden) { hidden.value = content; }
+        if (!window.tuiEditor && legacyTextarea) {
+          legacyTextarea.value = content;
+        }
+
+        copyPrevBtn.blur();
+        copyPrevBtn.classList.remove('btn-outline-secondary');
+        copyPrevBtn.classList.add('btn-success');
+        copyPrevBtn.textContent = 'Copied!';
+
+        window.setTimeout(() => {
+          copyPrevBtn.classList.remove('btn-success');
+          copyPrevBtn.classList.add('btn-outline-secondary');
+          copyPrevBtn.textContent = copyPrevBtn.dataset.originalText || 'Copy My Previous Update';
+        }, 2000);
+      });
+    }
+  }
 
   function showLoading(text = 'Loading…'){
     if (overlay){

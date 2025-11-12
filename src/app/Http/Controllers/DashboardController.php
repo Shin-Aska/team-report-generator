@@ -24,9 +24,29 @@ class DashboardController extends Controller
         $date = $request->query('date', Carbon::now()->toDateString());
 
         $user = Auth::user();
+        $baseDate = Carbon::parse($date);
+
         $myEntry = Entry::where('user_id', $user->id)
             ->whereDate('entry_date', $date)
             ->first();
+
+        $previousEntryDateObj = $baseDate->isMonday()
+            ? $baseDate->copy()->subDays(3)
+            : $baseDate->copy()->subDay();
+        $previousEntryDate = $previousEntryDateObj->toDateString();
+
+        $previousEntry = Entry::where('user_id', $user->id)
+            ->whereDate('entry_date', $previousEntryDate)
+            ->first();
+
+        $previousEntryLabel = $previousEntryDateObj->format('l, m/d/Y');
+
+        $previousEntryData = [
+            'date' => $previousEntryDate,
+            'label' => $previousEntryLabel,
+            'content' => $previousEntry?->content,
+            'hasEntry' => (bool) $previousEntry,
+        ];
 
         $teamEntries = Entry::with('user')
             ->whereDate('entry_date', $date)
@@ -41,6 +61,10 @@ class DashboardController extends Controller
         return view('dashboard.index', [
             'date' => $date,
             'myEntry' => $myEntry,
+            'previousEntry' => $previousEntry,
+            'previousEntryDate' => $previousEntryDate,
+            'previousEntryLabel' => $previousEntryLabel,
+            'previousEntryData' => $previousEntryData,
             'teamEntries' => $teamEntries,
             'teamUsers' => $teamUsers,
             'adoSummary' => $adoSummary,
