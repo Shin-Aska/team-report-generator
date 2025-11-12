@@ -10,7 +10,7 @@ use App\Services\BusProjectService;
 class SummarizerService
 {
     // Two-step daily pipeline: daily1 -> daily2, using {concatenated_report_here}
-    public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null): string
+    public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null, ?string $engine = null): string
     {
         $concatenated = $this->concatenateEntries($entries, $user);
         // Inject bus projects context into the prompt (only extra block besides concatenated reports)
@@ -40,7 +40,8 @@ class SummarizerService
         if (str_contains($prompt1, '{bus_projects}')) {
             $prompt1 = str_replace('{bus_projects}', $busProjects, $prompt1);
         }
-        $first = $this->callGeminiText($prompt1) ?? $this->callOpenAIText($prompt1);
+        $preferredEngines = $this->resolveEnginePreference($engine);
+        $first = $this->callWithPreferredEngines($preferredEngines, $prompt1);
         if (!$first) {
             return $this->fallbackDaily($entries, $date);
         }
@@ -64,7 +65,7 @@ class SummarizerService
         }
         // Step 2
         $prompt2 = str_replace('{concatenated_report_here}', $first, $daily2Template);
-        $second = $this->callGeminiText($prompt2) ?? $this->callOpenAIText($prompt2);
+        $second = $this->callWithPreferredEngines($preferredEngines, $prompt2);
 
         // Combine $first and $second where it is formatted where $first is the Summary and $second is the Briefdown
         $output = "# Summary\n\n";
@@ -79,11 +80,11 @@ class SummarizerService
         return $output;
     }
 
-    public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate): string
+    public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate, ?string $engine = null): string
     {
         $concatenated = $this->concatenateEntries($entries);
         $prompt = str_replace('{concatenated_report_here}', $concatenated, $weeklyTemplate);
-        $ai = $this->callGeminiText($prompt) ?? $this->callOpenAIText($prompt);
+        $ai = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt);
         if ($ai) return $ai;
 
         // Fallback: naive weekly outline
@@ -96,6 +97,42 @@ class SummarizerService
             $lines[] = "- [{$date}] {$name}: {$short}";
         }
         return implode("\n", $lines);
+    }
+
+    /**
+     * Determine the preferred engine order based on the provided hint.
+     *
+     * @return array<int, string>
+     */
+    protected function resolveEnginePreference(?string $engine): array
+    {
+        $normalized = $engine ? strtolower(trim($engine)) : null;
+        $engines = ['azure', 'openai', 'gemini'];
+        if ($normalized && in_array($normalized, $engines, true)) {
+            $order = array_merge([$normalized], array_values(array_diff($engines, [$normalized])));
+        } else {
+            $order = $engines;
+        }
+        return $order;
+    }
+
+    /**
+     * Attempt to call available LLM engines following the given preference list.
+     */
+    protected function callWithPreferredEngines(array $preferredEngines, string $text): ?string
+    {
+        foreach ($preferredEngines as $engine) {
+            $result = match ($engine) {
+                'azure' => $this->callAzureFoundryAIText($text),
+                'openai' => $this->callOpenAIText($text),
+                'gemini' => $this->callGeminiText($text),
+                default => null,
+            };
+            if ($result) {
+                return $result;
+            }
+        }
+        return null;
     }
 
     /**
@@ -181,7 +218,7 @@ class SummarizerService
             $resp = Http::withToken($key)
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/chat/completions', [
-                    'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+                    'model' => env('OPENAI_MODEL', 'gpt-4.1'),
                     'messages' => [ ['role' => 'user', 'content' => $text] ],
                     'temperature' => 0.2,
                 ]);
@@ -189,6 +226,39 @@ class SummarizerService
                 return $resp->json('choices.0.message.content');
             }
         } catch (\Throwable $e) { }
+        return null;
+    }
+
+    protected function callAzureFoundryAIText(string $text): ?string
+    {
+        $endpoint = env('AZURE_ENDPOINT');
+        $token = env('AZURE_API_KEY');
+        if (!$endpoint || !$token) {
+            return null;
+        }
+
+        try {
+            $resp = Http::withToken($token)
+                ->timeout(30)
+                ->asJson()
+                ->post($endpoint, [
+                    'messages' => [
+                        ['role' => 'user', 'content' => $text],
+                    ],
+                    'model' => env('AZURE_MODEL', 'gpt-4.1'),
+                ]);
+
+            if ($resp->successful()) {
+                $content = $resp->json('choices.0.message.content');
+                if (is_string($content)) {
+                    return $content;
+                }
+            }
+        } catch (
+            \Throwable $e
+        ) {
+        }
+
         return null;
     }
 

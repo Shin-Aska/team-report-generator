@@ -446,6 +446,17 @@
         @endforeach
       </div>
 
+      @if(!empty($llmEngines))
+      <div class="mb-3">
+        <label class="form-label mb-1" for="llmEngineSelect">LLM Engine</label>
+        <select class="form-select" id="llmEngineSelect">
+          @foreach($llmEngines as $value => $label)
+            <option value="{{ $value }}">{{ $label }}</option>
+          @endforeach
+        </select>
+      </div>
+      @endif
+
       <div class="mb-3">
         <div class="fw-semibold mb-2">Reporting</div>
         <button class="btn btn-primary w-100" type="button" onclick="generateDaily()">Generate Standup Report</button>
@@ -686,11 +697,19 @@
     loadEntryFor(id);
   }
 
+  function getSelectedEngine(){
+    const select = document.getElementById('llmEngineSelect');
+    if (!select) return null;
+    return select.value;
+  }
+
   async function generateDaily(){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    const engineValue = getSelectedEngine();
+    const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
     showLoading('Generating daily report…');
     try {
-      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
@@ -726,9 +745,11 @@
     const eNew = document.getElementById('weeklyEndNew'); if (eNew) eNew.value = range.end;
     const sOld = document.getElementById('weeklyStart'); if (sOld) sOld.value = range.start;
     const eOld = document.getElementById('weeklyEnd'); if (eOld) eOld.value = range.end;
+    const engineValue = getSelectedEngine();
+    const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
     showLoading('Generating weekly report…');
     try {
-      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;

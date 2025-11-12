@@ -58,6 +58,8 @@ class DashboardController extends Controller
         $adoSummary = $ado->getSummary();
         $busProjects = $bus->getForMonth(Carbon::parse($date));
 
+        $llmEngines = $this->determineAvailableEngines();
+
         return view('dashboard.index', [
             'date' => $date,
             'myEntry' => $myEntry,
@@ -69,6 +71,7 @@ class DashboardController extends Controller
             'teamUsers' => $teamUsers,
             'adoSummary' => $adoSummary,
             'busProjects' => $busProjects,
+            'llmEngines' => $llmEngines,
         ]);
     }
 
@@ -199,7 +202,8 @@ class DashboardController extends Controller
             $date,
             $prompts->getDaily1Template(),
             $prompts->getDaily2Template(),
-            Auth::user()?->name
+            Auth::user()?->name,
+            $request->query('engine')
         );
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
@@ -229,7 +233,12 @@ class DashboardController extends Controller
             ])->all();
 
         $range = $start->toFormattedDateString().' - '.$end->toFormattedDateString();
-        $markdown = $sum->summarizeWeekly($entries, $range, $prompts->getWeeklyTemplate());
+        $markdown = $sum->summarizeWeekly(
+            $entries,
+            $range,
+            $prompts->getWeeklyTemplate(),
+            $request->query('engine')
+        );
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -241,6 +250,21 @@ class DashboardController extends Controller
             ]);
         }
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));
+    }
+
+    protected function determineAvailableEngines(): array
+    {
+        $engines = [];
+        if (env('AZURE_API_KEY') && env('AZURE_ENDPOINT')) {
+            $engines['azure'] = 'Azure AI';
+        }
+        if (env('OPENAI_API_KEY')) {
+            $engines['openai'] = 'OpenAI';
+        }
+        if (env('GEMINI_API_KEY')) {
+            $engines['gemini'] = 'Gemini';
+        }
+        return $engines;
     }
 
     public function statusesByDate(Request $request)
