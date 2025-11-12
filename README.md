@@ -152,7 +152,7 @@ Visit http://127.0.0.1:8000 and log in with a seeded user.
     - Publish: `POST /entries/publish`
 
 - LLM proxy (CORS-enabled)
-    - `POST /llm` — forwards JSON payload to Gemini using `GEMINI_API_KEY`
+    - `POST /llm` — forwards JSON payload to configured LLM of your choosing
 
 ## Maintenance & operations
 
