@@ -203,13 +203,44 @@ When you control the full server (or VM/container), you can follow standard Lara
    - Capture logs with centralized logging (journalctl, CloudWatch, etc.).
    - Monitor application health via uptime checks or APM tools.
 
-Even with full control, your hosting provider or infrastructure platform may have specific guidelines for backups, firewall rules, or load balancers—consult their documentation to avoid conflicts.
+Even with full control, your hosting provider or infrastructure platform may have specific guidelines for backups, firewall rules, or load balancers-consult their documentation to avoid conflicts.
+
+---
+
+## Container-hosted platforms (Docker/Podman images)
+
+If your provider accepts container images or docker-compose bundles (e.g., container PaaS, image-based hosting, or Podman-compatible environments), you can use the provided `docker-compose.yml` and `src/Dockerfile`:
+
+1. Build locally (or in CI):
+   ```bash
+   podman compose build   # or: docker compose build
+   ```
+   This produces two images: `team-report-app` (PHP-FPM) and `team-report-web` (Nginx serving built assets).
+
+2. Prepare environment:
+   - Copy `src/.env.example` to `src/.env` and set secrets (DB, APP_KEY, LLM keys, etc.).
+   - Generate an app key once:  
+     `podman compose run --rm app sh -lc "cd /var/www/html && php artisan key:generate --force --no-interaction"`
+   - Optional: run migrations locally to bake DB schema into a managed DB, or let the container run them on start if your platform allows it.
+
+3. Publish images:
+   - Tag/push `team-report-app` and `team-report-web` to your registry, or upload the compose bundle if the platform supports it directly.
+
+4. Run on the provider:
+   - Set env vars to match your managed DB (host/user/pass/db name).
+   - Mount or inject `.env` (or individual secrets) into the app/web containers.
+   - Point ingress to the web container’s port 80.
+
+Notes:
+- The app image expects MySQL-compatible DB; adjust env vars accordingly.
+- Volumes for `storage/` and `bootstrap/cache/` should be writable by the web user; use bind mounts or managed volumes.
+- If your platform only accepts a single image, you can serve PHP-FPM behind its own Nginx/ingress, but the supplied compose file gives a ready-made app+web split.
 
 ---
 
 ## Post-deployment tasks
 
-1. **Database migrations** – run via SSH or the control-panel terminal:
+1. **Database migrations** - run via SSH or the control-panel terminal:
    ```bash
    php /home/<user>/report-generator/src/artisan migrate --force
    ```
