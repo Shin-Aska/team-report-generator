@@ -792,7 +792,7 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      copyBtn.onclick = () => navigator.clipboard.writeText(buildRangeMarkdown(data.html) || stripHtml(data.html));
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -808,11 +808,15 @@
       const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
-      document.getElementById('reportTitle').innerText = `Statuses - ${data.start} → ${data.end}`;
+      document.getElementById('reportTitle').innerText = `Statuses - ${data.start} - ${data.end}`;
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      copyBtn.onclick = () => {
+        const root = document.getElementById('reportHtml');
+        const md = buildRangeMarkdown(root);
+        navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
+      };
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -824,6 +828,29 @@
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     return tmp.textContent || tmp.innerText || '';
+  }
+
+  function buildRangeMarkdown(root){
+    const container = root instanceof HTMLElement ? root : null;
+    if (!container) return '';
+    const sections = [];
+    container.querySelectorAll('.accordion-item').forEach(item => {
+      if (item.classList.contains('d-none')) return;
+      const date = item.querySelector('.accordion-button')?.textContent.trim();
+      if (!date) return;
+      const rows = [];
+      item.querySelectorAll('.entry-item').forEach(entry => {
+        if (entry.classList.contains('d-none')) return;
+        const user = entry.querySelector('.fw-semibold')?.textContent.trim() || 'Unknown';
+        const body = entry.querySelector('.mt-2')?.innerText.trim() || '';
+        const indentedBody = body
+          ? body.split('\n').map(line => `  ${line}`.replace(/\s+$/, '')).join('\n')
+          : '';
+        rows.push(indentedBody ? `- **${user}**\n${indentedBody}` : `- **${user}**`);
+      });
+      if (rows.length) sections.push([`## ${date}`, ...rows].join('\n\n'));
+    });
+    return sections.join('\n\n').trim();
   }
 
   function toBullets(text){
