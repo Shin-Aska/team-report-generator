@@ -131,6 +131,51 @@ Or you can use the convenience Composer script (requires Node):
 
 Visit http://127.0.0.1:8000 and log in with a seeded user.
 
+## Running with containers (Docker or Podman)
+
+Use this when you don't want PHP/Node on your host. Requires Docker or Podman.
+
+1) Create your environment file (host-side, in `src/`)
+
+```bash
+cp src/.env.example src/.env
+# Edit API keys if you use LLM features; DB defaults already match compose (host=db, user=app, pass=app)
+```
+
+2) Build images
+
+```bash
+podman compose build   # or: docker compose build
+```
+
+3) Generate the app key inside the container (writes to your host `src/.env`)
+
+```bash
+podman compose run --rm app sh -lc "cd /var/www/html && php artisan key:generate --force --no-interaction"
+```
+
+4) Start the stack
+
+```bash
+podman compose up -d   # or: docker compose up -d
+```
+
+5) Run migrations explicitly
+
+```bash
+podman compose exec app sh -lc "cd /var/www/html && php artisan migrate --force"
+```
+
+What happens:
+- `app` (PHP-FPM) uses the bind-mounted `.env`.
+- `web` serves the built assets via Nginx on `http://localhost:8080`.
+- `db` is MySQL 8 with credentials `app`/`app` and database `app`.
+- `scheduler` and `queue` reuse the app image for cron and queue workers.
+
+Common commands:
+- Logs: `podman compose logs -f app`
+- Rebuild after code changes: `podman compose build && podman compose up -d`
+
 ## Key features and endpoints
 
 - Dashboard: `GET /dashboard`
