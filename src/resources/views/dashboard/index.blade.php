@@ -156,6 +156,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline-primary" id="copyBtn" type="button">Copy Markdown</button>
+          <button class="btn btn-outline-secondary" id="copyHtmlBtn" type="button">Copy Formatted</button>
           <button class="btn btn-primary" data-bs-dismiss="modal" type="button">Close</button>
         </div>
       </div>
@@ -716,6 +717,8 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(data.html);
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -756,6 +759,8 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(data.html);
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -792,7 +797,13 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      copyBtn.onclick = () => {
+        const root = document.getElementById('reportHtml');
+        const md = buildRangeMarkdown(root);
+        navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
+      };
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -812,7 +823,13 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(stripHtml(data.html));
+      copyBtn.onclick = () => {
+        const root = document.getElementById('reportHtml');
+        const md = buildRangeMarkdown(root);
+        navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
+      };
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -826,6 +843,42 @@
     return tmp.textContent || tmp.innerText || '';
   }
 
+  async function copyFormatted(html){
+    const plain = stripHtml(html || '');
+    if (!plain) return;
+    if (navigator.clipboard?.write) {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' })
+      });
+      await navigator.clipboard.write([item]);
+    } else {
+      await navigator.clipboard.writeText(plain);
+    }
+  }
+
+  function buildRangeMarkdown(root){
+    const container = root instanceof HTMLElement ? root : null;
+    if (!container) return '';
+    const sections = [];
+    container.querySelectorAll('.accordion-item').forEach(item => {
+      if (item.classList.contains('d-none')) return;
+      const date = item.querySelector('.accordion-button')?.textContent.trim();
+      if (!date) return;
+      const rows = [];
+      item.querySelectorAll('.entry-item').forEach(entry => {
+        if (entry.classList.contains('d-none')) return;
+        const user = entry.querySelector('.fw-semibold')?.textContent.trim() || 'Unknown';
+        const body = entry.querySelector('.mt-2')?.innerText.trim() || '';
+        const indentedBody = body
+          ? body.split('\n').map(line => `  ${line}`.replace(/\s+$/, '')).join('\n')
+          : '';
+        rows.push(indentedBody ? `- **${user}**\n${indentedBody}` : `- **${user}**`);
+      });
+      if (rows.length) sections.push([`## ${date}`, ...rows].join('\n\n'));
+    });
+    return sections.join('\n\n').trim();
+  }
   function toBullets(text){
     if(!text) return '';
     const lines = text.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
