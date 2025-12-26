@@ -803,7 +803,7 @@
         navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -829,7 +829,7 @@
         navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -843,7 +843,63 @@
     return tmp.textContent || tmp.innerText || '';
   }
 
-  async function copyFormatted(html){
+  function escapeHtml(str){
+    return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function inlineFormat(text){
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
+  function markdownishToHtml(text){
+    const safe = escapeHtml(text || '');
+    const lines = safe.split(/\r?\n/);
+    const out = [];
+    let inList = false;
+    const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+    for (const line of lines){
+      const trimmed = line.trim();
+      if (!trimmed) { closeList(); continue; }
+      const m = trimmed.match(/^[*-]\s+(.*)$/);
+      if (m){
+        if (!inList) { out.push('<ul>'); inList = true; }
+        out.push(`<li>${inlineFormat(m[1])}</li>`);
+      } else {
+        closeList();
+        out.push(`<p>${inlineFormat(trimmed)}</p>`);
+      }
+    }
+    closeList();
+    return out.join('');
+  }
+
+  function buildRangeHtml(root){
+    const container = root instanceof HTMLElement ? root : null;
+    if (!container) return '';
+    const sections = [];
+    container.querySelectorAll('.accordion-item').forEach(item => {
+      if (item.classList.contains('d-none')) return;
+      const date = item.querySelector('.accordion-button')?.textContent.trim();
+      if (!date) return;
+      const rows = [];
+      item.querySelectorAll('.entry-item').forEach(entry => {
+        if (entry.classList.contains('d-none')) return;
+        const user = entry.querySelector('.fw-semibold')?.textContent.trim() || 'Unknown';
+        const body = entry.querySelector('.mt-2')?.innerText || '';
+        const bodyHtml = markdownishToHtml(body);
+        rows.push(
+          `<div class="mb-3"><div><strong>${escapeHtml(user)}</strong></div>${bodyHtml ? `<div class="mt-1">${bodyHtml}</div>` : ''}</div>`
+        );
+      });
+      if (rows.length) sections.push(`<h3>${escapeHtml(date)}</h3>${rows.join('')}`);
+    });
+    return sections.join('') || container.innerHTML;
+  }
+
+  async function copyFormatted(source){
+    const html = source instanceof HTMLElement ? buildRangeHtml(source) : (source || '');
     const plain = stripHtml(html || '');
     if (!plain) return;
     if (navigator.clipboard?.write) {
