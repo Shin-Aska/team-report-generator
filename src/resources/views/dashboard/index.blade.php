@@ -156,6 +156,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline-primary" id="copyBtn" type="button">Copy Markdown</button>
+          <button class="btn btn-outline-secondary" id="copyHtmlBtn" type="button">Copy Formatted</button>
           <button class="btn btn-primary" data-bs-dismiss="modal" type="button">Close</button>
         </div>
       </div>
@@ -716,6 +717,8 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(data.html);
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -756,6 +759,8 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(data.html);
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -792,7 +797,13 @@
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(buildRangeMarkdown(data.html) || stripHtml(data.html));
+      copyBtn.onclick = () => {
+        const root = document.getElementById('reportHtml');
+        const md = buildRangeMarkdown(root);
+        navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
+      };
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -817,6 +828,8 @@
         const md = buildRangeMarkdown(root);
         navigator.clipboard.writeText(md || stripHtml(root?.innerHTML || ''));
       };
+      const copyHtmlBtn = document.getElementById('copyHtmlBtn');
+      copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml')?.innerHTML || '');
       const modal = new bootstrap.Modal(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -828,6 +841,20 @@
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     return tmp.textContent || tmp.innerText || '';
+  }
+
+  async function copyFormatted(html){
+    const plain = stripHtml(html || '');
+    if (!plain) return;
+    if (navigator.clipboard?.write) {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' })
+      });
+      await navigator.clipboard.write([item]);
+    } else {
+      await navigator.clipboard.writeText(plain);
+    }
   }
 
   function buildRangeMarkdown(root){
