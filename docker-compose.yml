@@ -1,0 +1,101 @@
+x-app-build: &app-build
+  context: ./src
+  dockerfile: Dockerfile
+
+services:
+  app:
+    build:
+      <<: *app-build
+      target: app-runtime
+    image: team-report-app:latest
+    env_file:
+      - ./src/.env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      CACHE_PREWARM: "true"
+      RUN_MIGRATIONS: "false"
+    networks:
+      - appnet
+    depends_on:
+      - db
+    # Persist Laravel writable directories
+    volumes:
+      - ./src/storage:/var/www/html/storage:Z
+      - ./src/bootstrap/cache:/var/www/html/bootstrap/cache:Z
+      - ./src/.env:/var/www/html/.env:Z
+
+  web:
+    build:
+      <<: *app-build
+      target: web
+    image: team-report-web:latest
+    ports:
+      - "8080:80"
+    depends_on:
+      - app
+    networks:
+      - appnet
+    volumes:
+      - ./src/storage:/var/www/html/storage:ro,Z
+
+  scheduler:
+    image: team-report-app:latest
+    depends_on:
+      - app
+      - db
+    env_file:
+      - ./src/.env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+    command: sh -c "while true; do php artisan schedule:run; sleep 60; done"
+    networks:
+      - appnet
+    volumes:
+      - ./src/storage:/var/www/html/storage:Z
+      - ./src/bootstrap/cache:/var/www/html/bootstrap/cache:Z
+      - ./src/.env:/var/www/html/.env:Z
+
+  queue:
+    image: team-report-app:latest
+    depends_on:
+      - app
+      - db
+    env_file:
+      - ./src/.env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+    command: php artisan queue:work --sleep=3 --tries=3 --timeout=120
+    networks:
+      - appnet
+    volumes:
+      - ./src/storage:/var/www/html/storage:Z
+      - ./src/bootstrap/cache:/var/www/html/bootstrap/cache:Z
+      - ./src/.env:/var/www/html/.env:Z
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: app
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql:Z
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - appnet
+
+networks:
+  appnet:
+
+volumes:
+  db_data:
