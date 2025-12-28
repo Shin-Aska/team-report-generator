@@ -935,6 +935,7 @@
     });
     return sections.join('\n\n').trim();
   }
+
   function toBullets(text){
     if(!text) return '';
     const lines = text.replace(/\r/g,'').split('\n').map(l=>l.trim()).filter(Boolean);
