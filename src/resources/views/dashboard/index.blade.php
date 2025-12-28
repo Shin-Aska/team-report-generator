@@ -819,7 +819,7 @@
       const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
-      document.getElementById('reportTitle').innerText = `Statuses - ${data.start} → ${data.end}`;
+      document.getElementById('reportTitle').innerText = `Statuses - ${data.start} - ${data.end}`;
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
       const copyBtn = document.getElementById('copyBtn');

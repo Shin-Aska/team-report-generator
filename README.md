@@ -176,6 +176,13 @@ Common commands:
 - Logs: `podman compose logs -f app`
 - Rebuild after code changes: `podman compose build && podman compose up -d`
 
+6) Rebuilding every code update
+- Every code update you have to rebuild the web app
+```bash
+podman compose build app web #or docker compose build app web
+podman compose up -d --force-recreate  #or docker compose up -d --force-recreate
+```
+
 ## Key features and endpoints
 
 - Dashboard: `GET /dashboard`
