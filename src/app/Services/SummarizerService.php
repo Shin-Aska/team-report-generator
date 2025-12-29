@@ -13,6 +13,22 @@ class SummarizerService
     public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null, ?string $engine = null): string
     {
         $concatenated = $this->concatenateEntries($entries, $user);
+        if (!$this->hasMeaningfulUpdates($entries)) {
+            try {
+                $adoSummary = (new DevopsWorkItemsService())->getSummary();
+                $ticketsTable = $this->buildTicketsMarkdownTable($adoSummary);
+            } catch (\Throwable $e) {
+                $ticketsTable = 'No ticket counts available.';
+            }
+
+            $output = "# Summary\n\n";
+            $output .= "No updates were submitted for {$date}.";
+            $output .= "\n\n---\n\n";
+            $output .= "# Briefdown\n\n";
+            $output .= "No updates were submitted for {$date}.";
+            $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
+            return $output;
+        }
         // Inject bus projects context into the prompt (only extra block besides concatenated reports)
         $busProjects = '';
         try {
@@ -82,6 +98,9 @@ class SummarizerService
 
     public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate, ?string $engine = null): string
     {
+        if (!$this->hasMeaningfulUpdates($entries)) {
+            return "# Weekly Report\nRange: {$range}\n\nNo updates were submitted for this period.";
+        }
         $concatenated = $this->concatenateEntries($entries);
         $prompt = str_replace('{concatenated_report_here}', $concatenated, $weeklyTemplate);
         $ai = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt);
@@ -172,6 +191,17 @@ class SummarizerService
             $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;
         }
         return implode("\n\n---\n\n", $parts);
+    }
+
+    protected function hasMeaningfulUpdates(array $entries): bool
+    {
+        foreach ($entries as $e) {
+            $content = trim((string)($e['content'] ?? ''));
+            if ($content !== '') {
+                return true;
+            }
+        }
+        return false;
     }
 
     protected function fallbackDaily(array $entries, string $date): string
