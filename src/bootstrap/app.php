@@ -12,21 +12,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $raw = getenv('TRUSTED_PROXIES') ?: '';
-        $trusted = array_values(array_filter(array_map('trim', explode(',', $raw))));
-
-        // Safe default if nothing is set:
-        if (! $trusted) {
-            $trusted = ['127.0.0.1', '::1'];
-        }
-
-        $middleware->trustProxies(
-            at: $trusted,
-            headers: Request::HEADER_X_FORWARDED_FOR
-                | Request::HEADER_X_FORWARDED_HOST
-                | Request::HEADER_X_FORWARDED_PORT
-                | Request::HEADER_X_FORWARDED_PROTO
-        );
+        //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
