@@ -20,6 +20,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        $raw = config('trust_proxies.proxies');
+
+        $proxies = is_array($raw)
+            ? $raw
+            : array_values(array_filter(array_map('trim', explode(',', (string) $raw))));
+
+        TrustProxies::at($proxies);
+        TrustProxies::withHeaders((int) config('trust_proxies.headers'));
     }
 }
