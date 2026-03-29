@@ -11,9 +11,8 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 - Post “as another user” from the dashboard (for PMs/team leads)
 - Daily and weekly reports rendered in Bootstrap modals (AJAX)
 - View team status entries by date or by date range
-- Gemini-first LLM summarization pipeline with templated prompts
+- LLM summarization pipeline with templated prompts (Gemini, OpenAI, Azure, Mistral)
 - In-app user management (admin-only): add, edit, and remove team members
-- LLM JSON proxy endpoint with CORS and basic rate limiting
 
 ## Repository layout
 
@@ -68,7 +67,7 @@ Copy `.env.example` to `.env` (if needed) and set the following:
  DB_USERNAME=root
  DB_PASSWORD=
  
- # LLM configuration (If more than one provided, a dropdown in the interface will appear)
+ # LLM configuration (at least one required; if more than one provided, a dropdown will appear)
 
  # Gemini
  GEMINI_API_KEY=your_gemini_key
@@ -78,17 +77,14 @@ Copy `.env.example` to `.env` (if needed) and set the following:
  OPENAI_API_KEY=
  OPENAI_MODEL=gpt-4.1 # Defaults to 4.1
 
- # Azure API key for /llm proxy
+ # Azure
  AZURE_ENDPOINT=your_endpoint
  AZURE_API_KEY=your_key_here
  AZURE_AI_MODEL=gpt-4.1 # Defaults to 4.1
 
- # Mistral API Key
+ # Mistral
  MISTRAL_API_KEY=your_key_here
- 
- # CORS allowlist for the /llm proxy (comma-separated; supports wildcards)
- LLM_ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
- 
+
  SESSION_DRIVER=file
  ```
 
@@ -142,16 +138,20 @@ cp src/.env.example src/.env
 # Edit API keys if you use LLM features; DB defaults already match compose (host=db, user=app, pass=app)
 ```
 
-2) Build images
+2) Generate the app key (no PHP or Laravel needed on the host)
+
+```bash
+# Linux / macOS / WSL
+sh generate-key.sh
+
+# Windows (PowerShell)
+.\generate-key.ps1
+```
+
+3) Build images
 
 ```bash
 podman compose build   # or: docker compose build
-```
-
-3) Generate the app key inside the container (writes to your host `src/.env`)
-
-```bash
-podman compose run --rm app sh -lc "cd /var/www/html && php artisan key:generate --force --no-interaction"
 ```
 
 4) Start the stack
@@ -160,10 +160,10 @@ podman compose run --rm app sh -lc "cd /var/www/html && php artisan key:generate
 podman compose up -d   # or: docker compose up -d
 ```
 
-5) Run migrations explicitly
+5) Run migrations and seed demo data
 
 ```bash
-podman compose exec app sh -lc "cd /var/www/html && php artisan migrate --force"
+podman compose exec app sh -lc "cd /var/www/html && php artisan migrate --force && php artisan db:seed --force"
 ```
 
 What happens:
@@ -202,9 +202,6 @@ podman compose up -d --force-recreate  #or docker compose up -d --force-recreate
 - Entries (AJAX helpers)
     - Fetch a user’s entry for a date: `GET /entries/fetch?user_id=ID&date=YYYY-MM-DD`
     - Publish: `POST /entries/publish`
-
-- LLM proxy (CORS-enabled)
-    - `POST /llm` — forwards JSON payload to configured LLM of your choosing
 
 ## Maintenance & operations
 

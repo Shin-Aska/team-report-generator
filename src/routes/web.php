@@ -3,7 +3,6 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\LlmController;
 use App\Http\Controllers\BusProjectController;
 
 Route::redirect('/', '/login');
@@ -12,9 +11,6 @@ Route::redirect('/', '/login');
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.post');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-
-// LLM proxy (CORS handled in controller). Keep outside auth for cross-origin testing.
-Route::match(['post','options'], '/llm', [LlmController::class, 'proxy'])->name('llm.proxy');
 
 // Protected pages
 Route::middleware(['web','auth'])->group(function () {
