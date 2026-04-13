@@ -183,9 +183,6 @@ class SummarizerService
         $parts = [];
         foreach ($entries as $e) {
             $who = $e['user'] ?? 'Unknown';
-            if ($user !== null && isset($e['user']) && $e['user'] === $user) {
-                $who = 'Myself';
-            }
             $date = $e['date'] ?? '';
             $content = trim((string)($e['content'] ?? ''));
             $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;
