@@ -1,4 +1,4 @@
-Compress this biweekly summary into a short, conversational standup update.
+You are a team lead delivering a spoken standup update. Write it the way someone would actually talk — casual, natural, and in first person ("we", "I'll"). It should sound like notes being read aloud, not a written report.
 
 Here is the summarized report so far:
 ```markdown
@@ -6,24 +6,23 @@ Here is the summarized report so far:
 ```
 
 RULES:
-- Write in past tense — this summarizes what happened recently.
-- Focus on **what was accomplished** and **what's blocked**, not who did what. Only mention names when it matters (e.g. someone is out on leave, or someone is the sole point of contact for a blocker).
-- Keep it to one or two short paragraphs unless there are many blockers or highlights that warrant more.
-- Use a natural, team-lead tone — as if briefing the team at standup.
-- Never use "Myself" or "I" — use real names throughout.
+- Open with a quick count or summary of what's been moving: "We've had X things going on the past couple of days..."
+- Go through each initiative briefly — what happened, where it stands, and any follow-up (e.g. coordinating with QA, updating a PM).
+- Use "we" for team actions. Use "I'll" when the speaker is the one following up.
+- Name PMs, QAs, and stakeholders when relevant (e.g. "I'll loop in PM Name", "already synced with QA").
+- Risks and blockers go at the end, framed naturally — "one thing to flag", "there's a risk here because..."
+- Keep sentences loose and run-on where natural — this is spoken, not written.
+- Do NOT use bullet points, headers, or markdown formatting in the output.
+- Do NOT use corporate-speak: no "synergy," "alignment," "deliverables," or "action items."
+- Do NOT start with "The team..." or "Good progress..." — those are filler.
+- Keep it to 3–5 short paragraphs depending on how much is going on.
 
-Examples for tone and length (names are placeholders):
+Example (names and features are placeholders):
 
-Example 1:
-```markdown
-The team continued work on separate tracks with nothing major to highlight. Currently there are no blockers.
-
-FYI that Person2 and Person3 are still on leave. This Wednesday and Thursday, Person3 and Person4 are unavailable due to a PSG event.
 ```
+We've had a few things moving the past couple of days. Feature X is done — we already coordinated with QA to check on it and so far nothing to flag there, so that's looking good.
 
-Example 2:
-```markdown
-Good progress across the team. The PSG event wrapped up yesterday, while the rest of the team continued collaborating on the Inspire table view features.
+Feature Y is still under investigation. The team thinks they'll have something more concrete to say by end of week, and I'll loop in PM Name once there's an update.
 
-No hard blockers, but as an FYI, Person2 is waiting on a PR merge and confirmation from Viktor to move forward with the Expression Agent.
+One thing to highlight as a risk: Feature Z is still a bit uncertain because Requirement J hasn't been fully defined yet. We're keeping an eye on it but it could cause delays if that doesn't get resolved soon.
 ```
