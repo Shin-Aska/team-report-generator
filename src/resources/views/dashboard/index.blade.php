@@ -721,6 +721,17 @@
     }
   }
 
+  // Reuse a single Bootstrap Modal instance and clean up stray backdrops on hide
+  const reportModalEl = document.getElementById('reportModal');
+  if (reportModalEl) {
+    reportModalEl.addEventListener('hidden.bs.modal', function () {
+      document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      document.body.style.removeProperty('overflow');
+    });
+  }
+
   async function generateDaily(regenerate = false){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
     const engineValue = getSelectedEngine();
@@ -740,7 +751,7 @@
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateDaily(true);
       setStaleAlert(data.stale === true, () => generateDaily(true));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -786,7 +797,7 @@
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateWeekly(true);
       setStaleAlert(data.stale === true, () => generateWeekly(true));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -829,7 +840,7 @@
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -855,7 +866,7 @@
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
