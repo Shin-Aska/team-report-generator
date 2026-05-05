@@ -68,6 +68,7 @@ Copy `.env.example` to `.env` (if needed) and set the following:
  DB_PASSWORD=
  
  # LLM configuration (at least one required; if more than one provided, a dropdown will appear)
+ LLM_TIMEOUT_SECONDS=120
 
  # Gemini
  GEMINI_API_KEY=your_gemini_key

@@ -257,6 +257,11 @@ class SummarizerService
     }
 
     // For template-style prompts that contain all instructions in one text.
+    protected function llmTimeoutSeconds(): int
+    {
+        return max(1, (int) env('LLM_TIMEOUT_SECONDS', 120));
+    }
+
     protected function callGeminiText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('GEMINI_API_KEY');
@@ -269,7 +274,7 @@ class SummarizerService
             try {
                 $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model) . ':generateContent?key=' . $key;
                 $payload = ['contents' => [['parts' => [['text' => $text]]]]];
-                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept' => 'application/json'])->post($url, $payload);
+                $resp = Http::timeout($this->llmTimeoutSeconds())->asJson()->withHeaders(['Accept' => 'application/json'])->post($url, $payload);
                 if ($resp->successful()) {
                     $candidates = $resp->json('candidates');
                     if (is_array($candidates) && isset($candidates[0]['content']['parts'][0]['text'])) {
@@ -293,7 +298,7 @@ class SummarizerService
         }
         try {
             $resp = Http::withToken($key)
-                ->timeout(30)
+                ->timeout($this->llmTimeoutSeconds())
                 ->post('https://api.openai.com/v1/chat/completions', [
                     'model' => env('OPENAI_MODEL', 'gpt-4.1'),
                     'messages' => [['role' => 'user', 'content' => $text]],
@@ -320,7 +325,7 @@ class SummarizerService
 
         try {
             $resp = Http::withToken($token)
-                ->timeout(30)
+                ->timeout($this->llmTimeoutSeconds())
                 ->asJson()
                 ->post($endpoint, [
                     'messages' => [
@@ -355,7 +360,7 @@ class SummarizerService
 
         try {
             $resp = Http::withToken($key)
-                ->timeout(30)
+                ->timeout($this->llmTimeoutSeconds())
                 ->asJson()
                 ->post('https://api.mistral.ai/v1/chat/completions', [
                     'model' => env('MISTRAL_MODEL', 'mistral-large-latest'),

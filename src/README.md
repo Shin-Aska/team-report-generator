@@ -42,7 +42,7 @@
    - **Queue/Cache/Sessions**: choose drivers that match your environment (`database`, `redis`, etc.).
    - **Mail**: provide SMTP credentials if you plan to send emails.
    - **AWS / File storage**: required only if you integrate S3-compatible storage.
-   - **LLM integrations**: set at least one of `GEMINI_API_KEY`, `AZURE_API_KEY`, `OPENAI_API_KEY`, or `MISTRAL_API_KEY` for report summarization.
+   - **LLM integrations**: set at least one of `GEMINI_API_KEY`, `AZURE_API_KEY`, `OPENAI_API_KEY`, or `MISTRAL_API_KEY` for report summarization. Set `LLM_TIMEOUT_SECONDS` to tune provider request timeouts; it defaults to 120 seconds.
 4. Store secrets in secure environment variables for production deployments. Avoid committing `.env` files to version control.
 
 ## 3. Code structure
