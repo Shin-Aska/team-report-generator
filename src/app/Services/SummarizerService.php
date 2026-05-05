@@ -160,20 +160,29 @@ class SummarizerService
 
     /**
      * Attempt to call available LLM engines following the given preference list.
+     * Preserves the first error so the user sees the failure from their chosen engine,
+     * not the last fallback in the chain.
      */
     protected function callWithPreferredEngines(array $preferredEngines, string $text, ?string &$lastError = null): ?string
     {
         foreach ($preferredEngines as $engine) {
+            $engineError = null;
             $result = match ($engine) {
-                'azure' => $this->callAzureFoundryAIText($text, $lastError),
-                'openai' => $this->callOpenAIText($text, $lastError),
-                'gemini' => $this->callGeminiText($text, $lastError),
-                'mistral' => $this->callMistralText($text, $lastError),
+                'azure' => $this->callAzureFoundryAIText($text, $engineError),
+                'openai' => $this->callOpenAIText($text, $engineError),
+                'gemini' => $this->callGeminiText($text, $engineError),
+                'mistral' => $this->callMistralText($text, $engineError),
                 default => null,
             };
             if ($result) {
                 return $result;
             }
+            if ($engineError && !$lastError) {
+                $lastError = $engineError;
+            }
+        }
+        if (!$lastError) {
+            $lastError = 'No LLM engine is configured.';
         }
         return null;
     }
