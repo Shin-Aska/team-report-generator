@@ -200,8 +200,6 @@ class DashboardController extends Controller
         $engine = $request->query('engine');
         $signature = hash('sha256', json_encode($entries) . $date . ($engine ?? ''));
 
-        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
-
         if (!$request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'daily')
@@ -214,6 +212,7 @@ class DashboardController extends Controller
             if ($cached) {
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
+                $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Standup Report',
@@ -251,6 +250,7 @@ class DashboardController extends Controller
         }
 
         $html = Str::markdown($markdown);
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Standup Report',
@@ -285,8 +285,6 @@ class DashboardController extends Controller
         $engine = $request->query('engine');
         $signature = hash('sha256', json_encode($entries) . $start->toDateString() . $end->toDateString() . ($engine ?? ''));
 
-        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
-
         if (!$request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'weekly')
@@ -300,6 +298,7 @@ class DashboardController extends Controller
             if ($cached) {
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
+                $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Weekly Report',
@@ -343,6 +342,7 @@ class DashboardController extends Controller
         }
 
         $html = Str::markdown($markdown);
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Weekly Report',
