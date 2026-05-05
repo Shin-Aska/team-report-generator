@@ -37,7 +37,11 @@ class SummarizerService
         $busProjects = '';
         try {
             $base = null;
-            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            try {
+                $base = Carbon::parse($date);
+            } catch (\Throwable $e) {
+                $base = Carbon::now();
+            }
             $busProjects = (new BusProjectService())->summarizeForPrompt($base);
         } catch (\Throwable $e) {
             $busProjects = 'No bus projects for this month.';
@@ -46,9 +50,13 @@ class SummarizerService
         $busyEntryProject = '';
         try {
             $base = null;
-            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            try {
+                $base = Carbon::parse($date);
+            } catch (\Throwable $e) {
+                $base = Carbon::now();
+            }
             $busyEntryProject = (new BusProjectService())->getPreparedTemplate($base);
-        } catch(\Throwable $e) {
+        } catch (\Throwable $e) {
             $busyEntryProject = '- No bus projects for this month.';
         }
 
@@ -202,8 +210,8 @@ class SummarizerService
             $lines[] = '| State | Count |';
             $lines[] = '|:------|------:|';
             foreach ($stateCounts as $state => $count) {
-                $safeState = str_replace('|', '\\|', (string)$state);
-                $lines[] = '| ' . $safeState . ' | ' . (string)$count . ' |';
+                $safeState = str_replace('|', '\\|', (string) $state);
+                $lines[] = '| ' . $safeState . ' | ' . (string) $count . ' |';
             }
             $lines[] = '';
         }
@@ -216,7 +224,7 @@ class SummarizerService
         foreach ($entries as $e) {
             $who = $e['user'] ?? 'Unknown';
             $date = $e['date'] ?? '';
-            $content = trim((string)($e['content'] ?? ''));
+            $content = trim((string) ($e['content'] ?? ''));
             $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;
         }
         return implode("\n\n---\n\n", $parts);
@@ -225,7 +233,7 @@ class SummarizerService
     protected function hasMeaningfulUpdates(array $entries): bool
     {
         foreach ($entries as $e) {
-            $content = trim((string)($e['content'] ?? ''));
+            $content = trim((string) ($e['content'] ?? ''));
             if ($content !== '') {
                 return true;
             }
@@ -256,12 +264,12 @@ class SummarizerService
             $lastError = 'Gemini: API key not configured.';
             return null;
         }
-        $models = ['gemini-2.5-pro', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash-lite'];
+        $models = ['gemini-3.1-pro', 'gemini-3-flash-preview'];
         foreach ($models as $model) {
             try {
-                $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.urlencode($model).':generateContent?key='.$key;
-                $payload = [ 'contents' => [ [ 'parts' => [ [ 'text' => $text ] ] ] ] ];
-                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept'=>'application/json'])->post($url, $payload);
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model) . ':generateContent?key=' . $key;
+                $payload = ['contents' => [['parts' => [['text' => $text]]]]];
+                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept' => 'application/json'])->post($url, $payload);
                 if ($resp->successful()) {
                     $candidates = $resp->json('candidates');
                     if (is_array($candidates) && isset($candidates[0]['content']['parts'][0]['text'])) {
@@ -288,7 +296,7 @@ class SummarizerService
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/chat/completions', [
                     'model' => env('OPENAI_MODEL', 'gpt-4.1'),
-                    'messages' => [ ['role' => 'user', 'content' => $text] ],
+                    'messages' => [['role' => 'user', 'content' => $text]],
                     'temperature' => 0.2,
                 ]);
             if ($resp->successful()) {
@@ -318,7 +326,9 @@ class SummarizerService
                     'messages' => [
                         ['role' => 'user', 'content' => $text],
                     ],
-                    'model' => env('AZURE_MODEL', 'gpt-4.1'),
+                    'max_completion_tokens' => 16384,
+                    'reasoning_effort' => 'high',
+                    'model' => env('AZURE_MODEL', 'gpt-5-nano'),
                 ]);
 
             if ($resp->successful()) {
@@ -373,7 +383,11 @@ class SummarizerService
      */
     protected function injectMonth(string $text, string $date): string
     {
-        try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+        try {
+            $base = Carbon::parse($date);
+        } catch (\Throwable $e) {
+            $base = Carbon::now();
+        }
         $month = $base->format('F');
         return str_replace('Goals for [Current Month] Bus:', 'Goals for ' . $month . ' Bus:', $text);
     }
