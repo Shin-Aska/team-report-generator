@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Models\Entry;
+use App\Models\GeneratedReport;
 use App\Models\User;
 use App\Services\PromptService;
 use App\Services\SummarizerService;
@@ -196,22 +197,70 @@ class DashboardController extends Controller
 
         // Keep the original requested/base date for labeling
         $date = $base->toDateString();
+        $engine = $request->query('engine');
+        $signature = hash('sha256', json_encode($entries) . $date . ($engine ?? ''));
 
-        $markdown = $sum->summarizeStandup(
+        if (!$request->boolean('regenerate')) {
+            $cached = GeneratedReport::where('user_id', Auth::id())
+                ->where('report_type', 'daily')
+                ->where('date', $date)
+                ->where(function ($q) use ($engine) {
+                    $q->where('engine', $engine)->orWhereNull('engine');
+                })
+                ->first();
+
+            if ($cached) {
+                $stale = $cached->signature !== $signature;
+                $html = Str::markdown($cached->content);
+                $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'title' => 'Standup Report',
+                        'date' => $date,
+                        'html' => $html,
+                        'markdown' => $cached->content,
+                        'stale' => $stale,
+                        'engineLabel' => $engineLabel,
+                    ]);
+                }
+                return view('reports.daily', ['html' => $html, 'markdown' => $cached->content, 'date' => $date, 'stale' => $stale]);
+            }
+        }
+
+        $result = $sum->summarizeStandup(
             $entries,
             $date,
             $prompts->getDaily1Template(),
             $prompts->getDaily2Template(),
             Auth::user()?->name,
-            $request->query('engine')
+            $engine
         );
+        $markdown = $result['content'];
+
+        if (!$result['isFallback']) {
+            GeneratedReport::updateOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'report_type' => 'daily',
+                    'date' => $date,
+                    'engine' => $engine,
+                ],
+                ['content' => $markdown, 'signature' => $signature]
+            );
+        }
+
         $html = Str::markdown($markdown);
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Standup Report',
                 'date' => $date,
                 'html' => $html,
                 'markdown' => $markdown,
+                'stale' => false,
+                'isFallback' => $result['isFallback'],
+                'error' => $result['error'],
+                'engineLabel' => $engineLabel,
             ]);
         }
         return view('reports.daily', compact('html', 'markdown', 'date'));
@@ -233,13 +282,67 @@ class DashboardController extends Controller
             ])->all();
 
         $range = $start->toFormattedDateString().' - '.$end->toFormattedDateString();
-        $markdown = $sum->summarizeWeekly(
+        $engine = $request->query('engine');
+        $signature = hash('sha256', json_encode($entries) . $start->toDateString() . $end->toDateString() . ($engine ?? ''));
+
+        if (!$request->boolean('regenerate')) {
+            $cached = GeneratedReport::where('user_id', Auth::id())
+                ->where('report_type', 'weekly')
+                ->where('start_date', $start->toDateString())
+                ->where('end_date', $end->toDateString())
+                ->where(function ($q) use ($engine) {
+                    $q->where('engine', $engine)->orWhereNull('engine');
+                })
+                ->first();
+
+            if ($cached) {
+                $stale = $cached->signature !== $signature;
+                $html = Str::markdown($cached->content);
+                $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'title' => 'Weekly Report',
+                        'start' => $cached->start_date->toDateString(),
+                        'end' => $cached->end_date->toDateString(),
+                        'html' => $html,
+                        'markdown' => $cached->content,
+                        'stale' => $stale,
+                        'engineLabel' => $engineLabel,
+                    ]);
+                }
+                return view('reports.weekly', [
+                    'html' => $html,
+                    'markdown' => $cached->content,
+                    'start' => $cached->start_date,
+                    'end' => $cached->end_date,
+                    'stale' => $stale,
+                ]);
+            }
+        }
+
+        $result = $sum->summarizeWeekly(
             $entries,
             $range,
             $prompts->getWeeklyTemplate(),
-            $request->query('engine')
+            $engine
         );
+        $markdown = $result['content'];
+
+        if (!$result['isFallback']) {
+            GeneratedReport::updateOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'report_type' => 'weekly',
+                    'start_date' => $start->toDateString(),
+                    'end_date' => $end->toDateString(),
+                    'engine' => $engine,
+                ],
+                ['content' => $markdown, 'signature' => $signature]
+            );
+        }
+
         $html = Str::markdown($markdown);
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Weekly Report',
@@ -247,6 +350,10 @@ class DashboardController extends Controller
                 'end' => $end->toDateString(),
                 'html' => $html,
                 'markdown' => $markdown,
+                'stale' => false,
+                'isFallback' => $result['isFallback'],
+                'error' => $result['error'],
+                'engineLabel' => $engineLabel,
             ]);
         }
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));

@@ -9,8 +9,12 @@ use App\Services\BusProjectService;
 
 class SummarizerService
 {
-    // Two-step daily pipeline: daily1 -> daily2, using {concatenated_report_here}
-    public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null, ?string $engine = null): string
+    /**
+     * Two-step daily pipeline: daily1 -> daily2, using {concatenated_report_here}
+     *
+     * @return array{content: string, isFallback: bool, error: string|null}
+     */
+    public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null, ?string $engine = null): array
     {
         $concatenated = $this->concatenateEntries($entries, $user);
         if (!$this->hasMeaningfulUpdates($entries)) {
@@ -27,13 +31,17 @@ class SummarizerService
             $output .= "# Briefdown\n\n";
             $output .= "No updates were submitted for {$date}.";
             $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
-            return $output;
+            return ['content' => $output, 'isFallback' => false, 'error' => null];
         }
         // Inject bus projects context into the prompt (only extra block besides concatenated reports)
         $busProjects = '';
         try {
             $base = null;
-            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            try {
+                $base = Carbon::parse($date);
+            } catch (\Throwable $e) {
+                $base = Carbon::now();
+            }
             $busProjects = (new BusProjectService())->summarizeForPrompt($base);
         } catch (\Throwable $e) {
             $busProjects = 'No bus projects for this month.';
@@ -42,9 +50,13 @@ class SummarizerService
         $busyEntryProject = '';
         try {
             $base = null;
-            try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+            try {
+                $base = Carbon::parse($date);
+            } catch (\Throwable $e) {
+                $base = Carbon::now();
+            }
             $busyEntryProject = (new BusProjectService())->getPreparedTemplate($base);
-        } catch(\Throwable $e) {
+        } catch (\Throwable $e) {
             $busyEntryProject = '- No bus projects for this month.';
         }
 
@@ -57,9 +69,14 @@ class SummarizerService
             $prompt1 = str_replace('{bus_projects}', $busProjects, $prompt1);
         }
         $preferredEngines = $this->resolveEnginePreference($engine);
-        $first = $this->callWithPreferredEngines($preferredEngines, $prompt1);
+        $lastError = null;
+        $first = $this->callWithPreferredEngines($preferredEngines, $prompt1, $lastError);
         if (!$first) {
-            return $this->fallbackDaily($entries, $date);
+            return [
+                'content' => $this->fallbackDaily($entries, $date),
+                'isFallback' => true,
+                'error' => $lastError ?? 'All LLM engines failed for step 1.',
+            ];
         }
         // Post-process Briefdown: inject current month; collect tickets for final output
         $first = $this->injectMonth($first, $date);
@@ -81,7 +98,7 @@ class SummarizerService
         }
         // Step 2
         $prompt2 = str_replace('{concatenated_report_here}', $first, $daily2Template);
-        $second = $this->callWithPreferredEngines($preferredEngines, $prompt2);
+        $second = $this->callWithPreferredEngines($preferredEngines, $prompt2, $lastError);
 
         // Combine $first and $second where it is formatted where $first is the Summary and $second is the Briefdown
         $output = "# Summary\n\n";
@@ -93,18 +110,28 @@ class SummarizerService
         }
         // Append tickets table at the end
         $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
-        return $output;
+        return ['content' => $output, 'isFallback' => false, 'error' => null];
     }
 
-    public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate, ?string $engine = null): string
+    /**
+     * @return array{content: string, isFallback: bool, error: string|null}
+     */
+    public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate, ?string $engine = null): array
     {
         if (!$this->hasMeaningfulUpdates($entries)) {
-            return "# Weekly Report\nRange: {$range}\n\nNo updates were submitted for this period.";
+            return [
+                'content' => "# Weekly Report\nRange: {$range}\n\nNo updates were submitted for this period.",
+                'isFallback' => false,
+                'error' => null,
+            ];
         }
         $concatenated = $this->concatenateEntries($entries);
         $prompt = str_replace('{concatenated_report_here}', $concatenated, $weeklyTemplate);
-        $ai = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt);
-        if ($ai) return $ai;
+        $lastError = null;
+        $ai = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt, $lastError);
+        if ($ai) {
+            return ['content' => $ai, 'isFallback' => false, 'error' => null];
+        }
 
         // Fallback: naive weekly outline
         $lines = ["# Weekly Report", "Range: {$range}", "", "## Highlights", "- Compiled from team entries.", "", "## Daily Notes"];
@@ -115,7 +142,11 @@ class SummarizerService
             $short = mb_substr($content, 0, 300);
             $lines[] = "- [{$date}] {$name}: {$short}";
         }
-        return implode("\n", $lines);
+        return [
+            'content' => implode("\n", $lines),
+            'isFallback' => true,
+            'error' => $lastError ?? 'All LLM engines failed.',
+        ];
     }
 
     /**
@@ -137,20 +168,29 @@ class SummarizerService
 
     /**
      * Attempt to call available LLM engines following the given preference list.
+     * Preserves the first error so the user sees the failure from their chosen engine,
+     * not the last fallback in the chain.
      */
-    protected function callWithPreferredEngines(array $preferredEngines, string $text): ?string
+    protected function callWithPreferredEngines(array $preferredEngines, string $text, ?string &$lastError = null): ?string
     {
         foreach ($preferredEngines as $engine) {
+            $engineError = null;
             $result = match ($engine) {
-                'azure' => $this->callAzureFoundryAIText($text),
-                'openai' => $this->callOpenAIText($text),
-                'gemini' => $this->callGeminiText($text),
-                'mistral' => $this->callMistralText($text),
+                'azure' => $this->callAzureFoundryAIText($text, $engineError),
+                'openai' => $this->callOpenAIText($text, $engineError),
+                'gemini' => $this->callGeminiText($text, $engineError),
+                'mistral' => $this->callMistralText($text, $engineError),
                 default => null,
             };
             if ($result) {
                 return $result;
             }
+            if ($engineError && !$lastError) {
+                $lastError = $engineError;
+            }
+        }
+        if (!$lastError) {
+            $lastError = 'No LLM engine is configured.';
         }
         return null;
     }
@@ -170,8 +210,8 @@ class SummarizerService
             $lines[] = '| State | Count |';
             $lines[] = '|:------|------:|';
             foreach ($stateCounts as $state => $count) {
-                $safeState = str_replace('|', '\\|', (string)$state);
-                $lines[] = '| ' . $safeState . ' | ' . (string)$count . ' |';
+                $safeState = str_replace('|', '\\|', (string) $state);
+                $lines[] = '| ' . $safeState . ' | ' . (string) $count . ' |';
             }
             $lines[] = '';
         }
@@ -184,7 +224,7 @@ class SummarizerService
         foreach ($entries as $e) {
             $who = $e['user'] ?? 'Unknown';
             $date = $e['date'] ?? '';
-            $content = trim((string)($e['content'] ?? ''));
+            $content = trim((string) ($e['content'] ?? ''));
             $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;
         }
         return implode("\n\n---\n\n", $parts);
@@ -193,7 +233,7 @@ class SummarizerService
     protected function hasMeaningfulUpdates(array $entries): bool
     {
         foreach ($entries as $e) {
-            $content = trim((string)($e['content'] ?? ''));
+            $content = trim((string) ($e['content'] ?? ''));
             if ($content !== '') {
                 return true;
             }
@@ -217,51 +257,64 @@ class SummarizerService
     }
 
     // For template-style prompts that contain all instructions in one text.
-    protected function callGeminiText(string $text): ?string
+    protected function callGeminiText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('GEMINI_API_KEY');
-        if (!$key) return null;
-        $models = ['gemini-2.5-pro', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash-lite'];
+        if (!$key) {
+            $lastError = 'Gemini: API key not configured.';
+            return null;
+        }
+        $models = ['gemini-3.1-pro', 'gemini-3-flash-preview'];
         foreach ($models as $model) {
             try {
-                $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.urlencode($model).':generateContent?key='.$key;
-                $payload = [ 'contents' => [ [ 'parts' => [ [ 'text' => $text ] ] ] ] ];
-                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept'=>'application/json'])->post($url, $payload);
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model) . ':generateContent?key=' . $key;
+                $payload = ['contents' => [['parts' => [['text' => $text]]]]];
+                $resp = Http::timeout(30)->asJson()->withHeaders(['Accept' => 'application/json'])->post($url, $payload);
                 if ($resp->successful()) {
                     $candidates = $resp->json('candidates');
                     if (is_array($candidates) && isset($candidates[0]['content']['parts'][0]['text'])) {
                         return $candidates[0]['content']['parts'][0]['text'];
                     }
                 }
-            } catch (\Throwable $e) { }
+                $lastError = 'Gemini: HTTP ' . $resp->status() . ' for model ' . $model . '.';
+            } catch (\Throwable $e) {
+                $lastError = 'Gemini (' . $model . '): ' . $e->getMessage();
+            }
         }
         return null;
     }
 
-    protected function callOpenAIText(string $text): ?string
+    protected function callOpenAIText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('OPENAI_API_KEY');
-        if (!$key) return null;
+        if (!$key) {
+            $lastError = 'OpenAI: API key not configured.';
+            return null;
+        }
         try {
             $resp = Http::withToken($key)
                 ->timeout(30)
                 ->post('https://api.openai.com/v1/chat/completions', [
                     'model' => env('OPENAI_MODEL', 'gpt-4.1'),
-                    'messages' => [ ['role' => 'user', 'content' => $text] ],
+                    'messages' => [['role' => 'user', 'content' => $text]],
                     'temperature' => 0.2,
                 ]);
             if ($resp->successful()) {
                 return $resp->json('choices.0.message.content');
             }
-        } catch (\Throwable $e) { }
+            $lastError = 'OpenAI: HTTP ' . $resp->status() . '.';
+        } catch (\Throwable $e) {
+            $lastError = 'OpenAI: ' . $e->getMessage();
+        }
         return null;
     }
 
-    protected function callAzureFoundryAIText(string $text): ?string
+    protected function callAzureFoundryAIText(string $text, ?string &$lastError = null): ?string
     {
         $endpoint = env('AZURE_ENDPOINT');
         $token = env('AZURE_API_KEY');
         if (!$endpoint || !$token) {
+            $lastError = 'Azure: endpoint or API key not configured.';
             return null;
         }
 
@@ -273,7 +326,9 @@ class SummarizerService
                     'messages' => [
                         ['role' => 'user', 'content' => $text],
                     ],
-                    'model' => env('AZURE_MODEL', 'gpt-4.1'),
+                    'max_completion_tokens' => 16384,
+                    'reasoning_effort' => 'high',
+                    'model' => env('AZURE_MODEL', 'gpt-5-nano'),
                 ]);
 
             if ($resp->successful()) {
@@ -282,17 +337,19 @@ class SummarizerService
                     return $content;
                 }
             }
+            $lastError = 'Azure: HTTP ' . $resp->status() . '.';
         } catch (\Throwable $e) {
-            // Handle the exception
+            $lastError = 'Azure: ' . $e->getMessage();
         }
 
         return null;
     }
 
-    protected function callMistralText(string $text): ?string
+    protected function callMistralText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('MISTRAL_API_KEY');
         if (!$key) {
+            $lastError = 'Mistral: API key not configured.';
             return null;
         }
 
@@ -313,7 +370,9 @@ class SummarizerService
                     return $content;
                 }
             }
+            $lastError = 'Mistral: HTTP ' . $resp->status() . '.';
         } catch (\Throwable $e) {
+            $lastError = 'Mistral: ' . $e->getMessage();
         }
 
         return null;
@@ -324,7 +383,11 @@ class SummarizerService
      */
     protected function injectMonth(string $text, string $date): string
     {
-        try { $base = Carbon::parse($date); } catch (\Throwable $e) { $base = Carbon::now(); }
+        try {
+            $base = Carbon::parse($date);
+        } catch (\Throwable $e) {
+            $base = Carbon::now();
+        }
         $month = $base->format('F');
         return str_replace('Goals for [Current Month] Bus:', 'Goals for ' . $month . ' Bus:', $text);
     }

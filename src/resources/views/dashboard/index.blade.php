@@ -152,11 +152,26 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
+          <div class="mb-2">
+            <span class="badge bg-secondary" id="engineLabelBadge">Engine</span>
+          </div>
+          <div class="alert alert-warning d-none" id="staleAlert" role="alert">
+            <div class="d-flex align-items-center justify-content-between">
+              <span>This report is out of date because the underlying entries have changed since it was generated.</span>
+              <button class="btn btn-sm btn-warning ms-3" id="staleRegenerateBtn" type="button">Regenerate now</button>
+            </div>
+          </div>
+          <div class="alert alert-danger d-none" id="fallbackAlert" role="alert">
+            <div class="fw-semibold mb-1">Report generation failed</div>
+            <div class="small">The output below is a simple concatenation of entries. The LLM could not generate a summary.</div>
+            <div class="small text-muted mt-1" id="fallbackError"></div>
+          </div>
           <div class="markdown-preview" id="reportHtml"></div>
         </div>
         <div class="modal-footer">
           <button class="btn btn-outline-primary" id="copyBtn" type="button">Copy Markdown</button>
           <button class="btn btn-outline-secondary" id="copyHtmlBtn" type="button">Copy Formatted</button>
+          <button class="btn btn-outline-info" id="regenerateBtn" type="button">Regenerate</button>
           <button class="btn btn-primary" data-bs-dismiss="modal" type="button">Close</button>
         </div>
       </div>
@@ -704,22 +719,60 @@
     return select.value;
   }
 
-  async function generateDaily(){
+  function setStaleAlert(isStale, regenerateFn){
+    const alert = document.getElementById('staleAlert');
+    const btn = document.getElementById('staleRegenerateBtn');
+    if (!alert) return;
+    alert.classList.toggle('d-none', !isStale);
+    if (btn && isStale) {
+      btn.onclick = () => { regenerateFn(); };
+    }
+  }
+
+  function setFallbackAlert(isFallback, error){
+    const alert = document.getElementById('fallbackAlert');
+    const errorEl = document.getElementById('fallbackError');
+    if (!alert) return;
+    alert.classList.toggle('d-none', !isFallback);
+    if (errorEl && isFallback) {
+      errorEl.textContent = error || '';
+    }
+  }
+
+  // Reuse a single Bootstrap Modal instance and clean up stray backdrops on hide
+  const reportModalEl = document.getElementById('reportModal');
+  if (reportModalEl) {
+    reportModalEl.addEventListener('hidden.bs.modal', function () {
+      document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.remove(); });
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('padding-right');
+      document.body.style.removeProperty('overflow');
+    });
+  }
+
+  async function generateDaily(regenerate = false){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
     const engineValue = getSelectedEngine();
     const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
+    const regenParam = regenerate ? '&regenerate=1' : '';
     showLoading('Generating daily report…');
     try {
-      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
       document.getElementById('reportHtml').innerHTML = data.html;
+      const engineBadge = document.getElementById('engineLabelBadge');
+      if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(data.html);
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const regenerateBtn = document.getElementById('regenerateBtn');
+      regenerateBtn.onclick = () => generateDaily(true);
+      setStaleAlert(data.stale === true, () => generateDaily(true));
+      setFallbackAlert(data.isFallback === true, data.error);
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -741,7 +794,7 @@
     fri.setDate(mon.getDate() + 4);
     return { start: toIsoLocal(mon), end: toIsoLocal(fri) };
   }
-  async function generateWeekly(){
+  async function generateWeekly(regenerate = false){
     const base = document.getElementById('weeklyEndNew')?.value || document.getElementById('weeklyEnd')?.value || '{{ $date }}';
     const range = monFriRange(base);
     const sNew = document.getElementById('weeklyStartNew'); if (sNew) sNew.value = range.start;
@@ -750,18 +803,25 @@
     const eOld = document.getElementById('weeklyEnd'); if (eOld) eOld.value = range.end;
     const engineValue = getSelectedEngine();
     const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
+    const regenParam = regenerate ? '&regenerate=1' : '';
     showLoading('Generating weekly report…');
     try {
-      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
       document.getElementById('reportHtml').innerHTML = data.html;
+      const engineBadge = document.getElementById('engineLabelBadge');
+      if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(data.html);
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const regenerateBtn = document.getElementById('regenerateBtn');
+      regenerateBtn.onclick = () => generateWeekly(true);
+      setStaleAlert(data.stale === true, () => generateWeekly(true));
+      setFallbackAlert(data.isFallback === true, data.error);
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -804,7 +864,7 @@
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -830,7 +890,7 @@
       };
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
       copyHtmlBtn.onclick = () => copyFormatted(document.getElementById('reportHtml'));
-      const modal = new bootstrap.Modal(document.getElementById('reportModal'));
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
       hideLoading();
@@ -953,12 +1013,41 @@
     return;
   }
 
+  // Draft caching helpers
+  const DRAFT_KEY_PREFIX = 'reportgen_draft';
+  function getDraftKey(){
+    const asUserId = document.getElementById('as_user_id').value;
+    const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    return `${DRAFT_KEY_PREFIX}_${asUserId}_${date}`;
+  }
+  function saveDraft(){
+    if (!window.tuiEditor) return;
+    const content = window.tuiEditor.getMarkdown();
+    const key = getDraftKey();
+    if (content.trim()) {
+      localStorage.setItem(key, content);
+    } else {
+      localStorage.removeItem(key);
+    }
+  }
+  function restoreDraft(){
+    const hidden = document.getElementById('contentField');
+    if (!hidden || hidden.value.trim()) return;
+    const key = getDraftKey();
+    const draft = localStorage.getItem(key);
+    if (draft && window.tuiEditor) {
+      window.tuiEditor.setMarkdown(draft);
+      hidden.value = draft;
+    }
+  }
+
   // Hook new form submit to compose markdown into hidden field
   const publishFormNew = document.getElementById('publishFormNew');
   if (publishFormNew){
     publishFormNew.addEventListener('submit', function(){
       const hidden = document.getElementById('contentField');
       if (hidden && window.tuiEditor){ hidden.value = window.tuiEditor.getMarkdown(); }
+      localStorage.removeItem(getDraftKey());
     });
   }
 
@@ -983,7 +1072,12 @@
         initialValue: hidden ? hidden.value : ''
       });
     }
+    restoreDraft();
   });
+
+  // Auto-save draft every 10 seconds and on page unload
+  setInterval(saveDraft, 10000);
+  window.addEventListener('beforeunload', saveDraft);
 
   async function loadEntryFor(userId){
     const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
@@ -993,9 +1087,15 @@
       if(!res.ok) return;
       const data = await res.json();
       const hidden = document.getElementById('contentField');
-      const content = data.found ? data.content : '';
-      if (window.tuiEditor) { window.tuiEditor.setMarkdown(content || ''); }
-      if (hidden) { hidden.value = content; }
+      if (data.found) {
+        const content = data.content || '';
+        if (window.tuiEditor) { window.tuiEditor.setMarkdown(content); }
+        if (hidden) { hidden.value = content; }
+      } else {
+        if (window.tuiEditor) { window.tuiEditor.setMarkdown(''); }
+        if (hidden) { hidden.value = ''; }
+        restoreDraft();
+      }
     } catch (e) {}
     finally { if (editorLoading) editorLoading.classList.add('d-none'); }
   }
