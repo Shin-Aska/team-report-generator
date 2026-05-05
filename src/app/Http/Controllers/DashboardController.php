@@ -225,7 +225,7 @@ class DashboardController extends Controller
             }
         }
 
-        $markdown = $sum->summarizeStandup(
+        $result = $sum->summarizeStandup(
             $entries,
             $date,
             $prompts->getDaily1Template(),
@@ -233,16 +233,19 @@ class DashboardController extends Controller
             Auth::user()?->name,
             $engine
         );
+        $markdown = $result['content'];
 
-        GeneratedReport::updateOrCreate(
-            [
-                'user_id' => Auth::id(),
-                'report_type' => 'daily',
-                'date' => $date,
-                'engine' => $engine,
-            ],
-            ['content' => $markdown, 'signature' => $signature]
-        );
+        if (!$result['isFallback']) {
+            GeneratedReport::updateOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'report_type' => 'daily',
+                    'date' => $date,
+                    'engine' => $engine,
+                ],
+                ['content' => $markdown, 'signature' => $signature]
+            );
+        }
 
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
@@ -252,6 +255,8 @@ class DashboardController extends Controller
                 'html' => $html,
                 'markdown' => $markdown,
                 'stale' => false,
+                'isFallback' => $result['isFallback'],
+                'error' => $result['error'],
             ]);
         }
         return view('reports.daily', compact('html', 'markdown', 'date'));
@@ -309,23 +314,26 @@ class DashboardController extends Controller
             }
         }
 
-        $markdown = $sum->summarizeWeekly(
+        $result = $sum->summarizeWeekly(
             $entries,
             $range,
             $prompts->getWeeklyTemplate(),
             $engine
         );
+        $markdown = $result['content'];
 
-        GeneratedReport::updateOrCreate(
-            [
-                'user_id' => Auth::id(),
-                'report_type' => 'weekly',
-                'start_date' => $start->toDateString(),
-                'end_date' => $end->toDateString(),
-                'engine' => $engine,
-            ],
-            ['content' => $markdown, 'signature' => $signature]
-        );
+        if (!$result['isFallback']) {
+            GeneratedReport::updateOrCreate(
+                [
+                    'user_id' => Auth::id(),
+                    'report_type' => 'weekly',
+                    'start_date' => $start->toDateString(),
+                    'end_date' => $end->toDateString(),
+                    'engine' => $engine,
+                ],
+                ['content' => $markdown, 'signature' => $signature]
+            );
+        }
 
         $html = Str::markdown($markdown);
         if ($request->ajax() || $request->wantsJson()) {
@@ -336,6 +344,8 @@ class DashboardController extends Controller
                 'html' => $html,
                 'markdown' => $markdown,
                 'stale' => false,
+                'isFallback' => $result['isFallback'],
+                'error' => $result['error'],
             ]);
         }
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));

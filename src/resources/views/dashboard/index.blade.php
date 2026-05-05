@@ -158,6 +158,11 @@
               <button class="btn btn-sm btn-warning ms-3" id="staleRegenerateBtn" type="button">Regenerate now</button>
             </div>
           </div>
+          <div class="alert alert-danger d-none" id="fallbackAlert" role="alert">
+            <div class="fw-semibold mb-1">Report generation failed</div>
+            <div class="small">The output below is a simple concatenation of entries. The LLM could not generate a summary.</div>
+            <div class="small text-muted mt-1" id="fallbackError"></div>
+          </div>
           <div class="markdown-preview" id="reportHtml"></div>
         </div>
         <div class="modal-footer">
@@ -721,6 +726,16 @@
     }
   }
 
+  function setFallbackAlert(isFallback, error){
+    const alert = document.getElementById('fallbackAlert');
+    const errorEl = document.getElementById('fallbackError');
+    if (!alert) return;
+    alert.classList.toggle('d-none', !isFallback);
+    if (errorEl && isFallback) {
+      errorEl.textContent = error || '';
+    }
+  }
+
   // Reuse a single Bootstrap Modal instance and clean up stray backdrops on hide
   const reportModalEl = document.getElementById('reportModal');
   if (reportModalEl) {
@@ -751,6 +766,7 @@
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateDaily(true);
       setStaleAlert(data.stale === true, () => generateDaily(true));
+      setFallbackAlert(data.isFallback === true, data.error);
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
@@ -797,6 +813,7 @@
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateWeekly(true);
       setStaleAlert(data.stale === true, () => generateWeekly(true));
+      setFallbackAlert(data.isFallback === true, data.error);
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
     } finally {
