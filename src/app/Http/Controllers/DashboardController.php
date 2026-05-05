@@ -200,6 +200,8 @@ class DashboardController extends Controller
         $engine = $request->query('engine');
         $signature = hash('sha256', json_encode($entries) . $date . ($engine ?? ''));
 
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
+
         if (!$request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'daily')
@@ -219,6 +221,7 @@ class DashboardController extends Controller
                         'html' => $html,
                         'markdown' => $cached->content,
                         'stale' => $stale,
+                        'engineLabel' => $engineLabel,
                     ]);
                 }
                 return view('reports.daily', ['html' => $html, 'markdown' => $cached->content, 'date' => $date, 'stale' => $stale]);
@@ -257,6 +260,7 @@ class DashboardController extends Controller
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
+                'engineLabel' => $engineLabel,
             ]);
         }
         return view('reports.daily', compact('html', 'markdown', 'date'));
@@ -281,6 +285,8 @@ class DashboardController extends Controller
         $engine = $request->query('engine');
         $signature = hash('sha256', json_encode($entries) . $start->toDateString() . $end->toDateString() . ($engine ?? ''));
 
+        $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
+
         if (!$request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'weekly')
@@ -302,6 +308,7 @@ class DashboardController extends Controller
                         'html' => $html,
                         'markdown' => $cached->content,
                         'stale' => $stale,
+                        'engineLabel' => $engineLabel,
                     ]);
                 }
                 return view('reports.weekly', [
@@ -346,6 +353,7 @@ class DashboardController extends Controller
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
+                'engineLabel' => $engineLabel,
             ]);
         }
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));

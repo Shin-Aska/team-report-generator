@@ -152,6 +152,9 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
+          <div class="mb-2">
+            <span class="badge bg-secondary" id="engineLabelBadge">Engine</span>
+          </div>
           <div class="alert alert-warning d-none" id="staleAlert" role="alert">
             <div class="d-flex align-items-center justify-content-between">
               <span>This report is out of date because the underlying entries have changed since it was generated.</span>
@@ -759,6 +762,8 @@
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
       document.getElementById('reportHtml').innerHTML = data.html;
+      const engineBadge = document.getElementById('engineLabelBadge');
+      if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
@@ -806,6 +811,8 @@
       if (modalHeader) modalHeader.classList.remove('d-none');
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
       document.getElementById('reportHtml').innerHTML = data.html;
+      const engineBadge = document.getElementById('engineLabelBadge');
+      if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
       copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
