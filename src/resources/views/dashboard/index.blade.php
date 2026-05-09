@@ -859,7 +859,7 @@
       const staleBadge = ref.stale ? '<span class="badge bg-warning text-dark ms-2">Stale</span>' : '';
       
       const div = document.createElement('div');
-      div.className = 'd-flex align-items-center justify-content-between p-2 border rounded bg-white';
+      div.className = 'd-flex align-items-center justify-content-between p-2 subcard';
       
       const nameDiv = document.createElement('div');
       nameDiv.className = 'small fw-medium';
