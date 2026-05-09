@@ -175,13 +175,17 @@
                 <button class="btn btn-sm btn-outline-primary" id="refineExecutiveBtn" type="button">Exec View</button>
                 <button class="btn btn-sm btn-outline-primary" id="refineBlockersBtn" type="button">Blockers First</button>
                 <button class="btn btn-sm btn-outline-primary" id="refineSlackBtn" type="button">Slack Style</button>
-                <button class="btn btn-sm btn-outline-secondary d-none" id="openSavedRefineBtn" type="button">Open Saved Refine</button>
-                <button class="btn btn-sm btn-outline-secondary d-none" id="regenSavedRefineBtn" type="button">Regenerate Saved Refine</button>
                 <button class="btn btn-sm btn-outline-secondary d-none" id="refineResetBtn" type="button">Reset</button>
               </div>
               <div class="d-flex gap-2 align-items-start flex-column flex-md-row">
                 <input class="form-control" id="refinePromptInput" type="text" maxlength="500" placeholder="Refine this report... e.g. make it less formal and 5 bullets max">
                 <button class="btn btn-primary" id="refinePromptBtn" type="button">Apply Prompt</button>
+              </div>
+              <div id="savedRefinementsList" class="d-none mt-2">
+                <div class="small fw-semibold text-muted mb-2">Saved Versions:</div>
+                <div class="d-flex flex-column gap-2" id="savedRefinementsContainer">
+                  <!-- dynamic versions will go here -->
+                </div>
               </div>
               <div class="small text-muted d-none" id="reportRefineStatus"></div>
             </div>
@@ -687,7 +691,7 @@
     currentHtml: '',
     currentMarkdown: '',
     engine: null,
-    latestRefinement: null,
+    savedRefinements: [],
   };
 
   const copyPrevBtn = document.getElementById('copyPreviousUpdateBtn');
@@ -803,8 +807,6 @@
       'refineExecutiveBtn',
       'refineBlockersBtn',
       'refineSlackBtn',
-      'openSavedRefineBtn',
-      'regenSavedRefineBtn',
       'refineResetBtn',
       'refinePromptBtn',
       'refinePromptInput'
@@ -838,21 +840,55 @@
     })[refinement.mode] || refinement.mode;
   }
 
-  function updateSavedRefinementButtons(){
-    const openBtn = document.getElementById('openSavedRefineBtn');
-    const regenBtn = document.getElementById('regenSavedRefineBtn');
-    const refinement = reportState.latestRefinement;
-    if (!openBtn || !regenBtn) return;
-
-    const hasSaved = !!refinement;
-    openBtn.classList.toggle('d-none', !hasSaved);
-    regenBtn.classList.toggle('d-none', !hasSaved);
-
-    if (!hasSaved) return;
-
-    const label = getRefinementLabel(refinement);
-    openBtn.textContent = refinement.stale ? `Open Saved Refine (${label}, stale)` : `Open Saved Refine (${label})`;
-    regenBtn.textContent = refinement.stale ? `Regenerate Saved Refine (${label})` : `Regenerate Saved Refine`;
+  function renderSavedRefinements(){
+    const container = document.getElementById('savedRefinementsContainer');
+    const listWrapper = document.getElementById('savedRefinementsList');
+    if (!container || !listWrapper) return;
+    
+    const refinements = reportState.savedRefinements || [];
+    if (refinements.length === 0) {
+      listWrapper.classList.add('d-none');
+      return;
+    }
+    
+    listWrapper.classList.remove('d-none');
+    container.innerHTML = '';
+    
+    refinements.forEach(ref => {
+      const label = getRefinementLabel(ref);
+      const staleBadge = ref.stale ? '<span class="badge bg-warning text-dark ms-2">Stale</span>' : '';
+      
+      const div = document.createElement('div');
+      div.className = 'd-flex align-items-center justify-content-between p-2 border rounded bg-white';
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'small fw-medium';
+      nameDiv.innerHTML = `${escapeHtml(label)}${staleBadge}`;
+      
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'd-flex gap-2';
+      
+      const openBtn = document.createElement('button');
+      openBtn.className = 'btn btn-sm btn-outline-secondary';
+      openBtn.textContent = 'Open';
+      openBtn.onclick = () => {
+        renderReport(ref.html, ref.markdown);
+        setRefineStatus(ref.stale ? `Showing saved version "${label}" (Stale).` : `Showing saved version "${label}".`, ref.stale ? 'muted' : 'success');
+      };
+      
+      const regenBtn = document.createElement('button');
+      regenBtn.className = 'btn btn-sm btn-outline-primary';
+      regenBtn.textContent = 'Regenerate';
+      regenBtn.onclick = () => refineReport(ref.mode, ref.prompt || '', reportState.originalMarkdown);
+      
+      actionsDiv.appendChild(openBtn);
+      actionsDiv.appendChild(regenBtn);
+      
+      div.appendChild(nameDiv);
+      div.appendChild(actionsDiv);
+      
+      container.appendChild(div);
+    });
   }
 
   function getCurrentReportHtml(){
@@ -879,13 +915,13 @@
     reportState.currentHtml = '';
     reportState.currentMarkdown = '';
     reportState.engine = null;
-    reportState.latestRefinement = null;
+    reportState.savedRefinements = [];
     setRefineStatus('');
     if (refinePromptInput) refinePromptInput.value = '';
-    updateSavedRefinementButtons();
+    renderSavedRefinements();
   }
 
-  function initializeReportState(kind, markdown, html, generatedReportId, latestRefinement){
+  function initializeReportState(kind, markdown, html, generatedReportId, savedRefinements){
     reportState.kind = kind;
     reportState.generatedReportId = generatedReportId || null;
     reportState.originalHtml = html || '';
@@ -893,16 +929,16 @@
     reportState.currentHtml = html || '';
     reportState.currentMarkdown = markdown || '';
     reportState.engine = getSelectedEngine();
-    reportState.latestRefinement = latestRefinement || null;
+    reportState.savedRefinements = savedRefinements || [];
     setRefinePanelVisible(kind === 'daily' || kind === 'weekly');
-    if (latestRefinement) {
-      const label = getRefinementLabel(latestRefinement);
-      setRefineStatus(latestRefinement.stale ? `Saved refinement available (${label}), but it was generated from an older base report.` : `Saved refinement available: ${label}.`, latestRefinement.stale ? 'muted' : 'success');
+    if (reportState.savedRefinements.length > 0) {
+      const activeCount = reportState.savedRefinements.filter(r => !r.stale).length;
+      setRefineStatus(activeCount > 0 ? `${reportState.savedRefinements.length} saved version(s) available.` : `${reportState.savedRefinements.length} saved version(s) available, but some/all are stale.`, activeCount > 0 ? 'success' : 'muted');
     } else {
       setRefineStatus(kind === 'daily' ? 'Tip: refine the spoken summary without regenerating the whole report.' : '');
     }
     updateResetButton();
-    updateSavedRefinementButtons();
+    renderSavedRefinements();
   }
 
   function enhanceReportMarkup(root, kind){
@@ -975,9 +1011,11 @@
         throw new Error(data.message || 'Refinement failed.');
       }
       renderReport(data.html, data.markdown);
-      reportState.latestRefinement = data.latestRefinement || null;
-      updateSavedRefinementButtons();
-      const actionLabel = getRefinementLabel(reportState.latestRefinement || { mode, prompt: instruction });
+      reportState.savedRefinements = data.savedRefinements || [];
+      renderSavedRefinements();
+      
+      const newRef = reportState.savedRefinements.find(r => r.mode === mode && r.prompt === (instruction || null));
+      const actionLabel = getRefinementLabel(newRef || { mode, prompt: instruction });
       setRefineStatus(data.isFallback ? `Saved ${actionLabel}, using a lightweight fallback rewrite because the AI refinement step was unavailable.` : `Saved ${actionLabel}.`, data.isFallback ? 'muted' : 'success');
     } catch (error) {
       setRefineStatus(error.message || 'Refinement failed.', 'error');
@@ -1009,7 +1047,7 @@
       const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
-      initializeReportState('daily', data.markdown, data.html, data.reportId, data.latestRefinement);
+      initializeReportState('daily', data.markdown, data.html, data.reportId, data.savedRefinements);
       document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
       renderReport(data.html, data.markdown);
       const engineBadge = document.getElementById('engineLabelBadge');
@@ -1059,7 +1097,7 @@
       const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
-      initializeReportState('weekly', data.markdown, data.html, data.reportId, data.latestRefinement);
+      initializeReportState('weekly', data.markdown, data.html, data.reportId, data.savedRefinements);
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
       renderReport(data.html, data.markdown);
       const engineBadge = document.getElementById('engineLabelBadge');
@@ -1391,17 +1429,6 @@
   document.getElementById('refineExecutiveBtn')?.addEventListener('click', () => refineReport('executive'));
   document.getElementById('refineBlockersBtn')?.addEventListener('click', () => refineReport('blockers'));
   document.getElementById('refineSlackBtn')?.addEventListener('click', () => refineReport('slack'));
-  document.getElementById('openSavedRefineBtn')?.addEventListener('click', () => {
-    const refinement = reportState.latestRefinement;
-    if (!refinement) return;
-    renderReport(refinement.html, refinement.markdown);
-    setRefineStatus(refinement.stale ? `Showing saved refinement "${getRefinementLabel(refinement)}" from an older base report.` : `Showing saved refinement "${getRefinementLabel(refinement)}".`, refinement.stale ? 'muted' : 'success');
-  });
-  document.getElementById('regenSavedRefineBtn')?.addEventListener('click', () => {
-    const refinement = reportState.latestRefinement;
-    if (!refinement) return;
-    refineReport(refinement.mode, refinement.prompt || '', reportState.originalMarkdown);
-  });
   document.getElementById('refinePromptBtn')?.addEventListener('click', () => {
     const instruction = refinePromptInput?.value.trim() || '';
     if (!instruction) {

@@ -214,7 +214,7 @@ class DashboardController extends Controller
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
                 $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
-                $latestRefinement = $this->serializeLatestRefinement($cached, $stale);
+                $savedRefinements = $this->serializeAllRefinements($cached, $stale);
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Standup Report',
@@ -222,7 +222,7 @@ class DashboardController extends Controller
                         'html' => $html,
                         'markdown' => $cached->content,
                         'reportId' => $cached->id,
-                        'latestRefinement' => $latestRefinement,
+                        'savedRefinements' => $savedRefinements,
                         'stale' => $stale,
                         'engineLabel' => $engineLabel,
                     ]);
@@ -269,7 +269,7 @@ class DashboardController extends Controller
                 'html' => $html,
                 'markdown' => $markdown,
                 'reportId' => $savedReport?->id,
-                'latestRefinement' => $savedReport ? $this->serializeLatestRefinement($savedReport, false) : null,
+                'savedRefinements' => $savedReport ? $this->serializeAllRefinements($savedReport, false) : [],
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
@@ -312,7 +312,7 @@ class DashboardController extends Controller
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
                 $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
-                $latestRefinement = $this->serializeLatestRefinement($cached, $stale);
+                $savedRefinements = $this->serializeAllRefinements($cached, $stale);
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Weekly Report',
@@ -321,7 +321,7 @@ class DashboardController extends Controller
                         'html' => $html,
                         'markdown' => $cached->content,
                         'reportId' => $cached->id,
-                        'latestRefinement' => $latestRefinement,
+                        'savedRefinements' => $savedRefinements,
                         'stale' => $stale,
                         'engineLabel' => $engineLabel,
                     ]);
@@ -375,7 +375,7 @@ class DashboardController extends Controller
                 'html' => $html,
                 'markdown' => $markdown,
                 'reportId' => $savedReport?->id,
-                'latestRefinement' => $savedReport ? $this->serializeLatestRefinement($savedReport, false) : null,
+                'savedRefinements' => $savedReport ? $this->serializeAllRefinements($savedReport, false) : [],
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
@@ -427,7 +427,7 @@ class DashboardController extends Controller
             'html' => Str::markdown($result['content']),
             'isFallback' => $result['isFallback'],
             'error' => $result['error'],
-            'latestRefinement' => $this->serializeRefinement($refinedReport, false),
+            'savedRefinements' => $this->serializeAllRefinements($report, false),
         ]);
     }
 
@@ -502,15 +502,17 @@ class DashboardController extends Controller
         ]);
     }
 
-    protected function serializeLatestRefinement(GeneratedReport $report, bool $baseReportIsStale): ?array
+    protected function serializeAllRefinements(GeneratedReport $report, bool $baseReportIsStale): array
     {
-        $latest = $report->refinedReports()->latest('updated_at')->first();
-        if (!$latest) {
-            return null;
-        }
-
-        $isStale = $baseReportIsStale || (($report->signature ?? '') !== ($latest->source_signature ?? ''));
-        return $this->serializeRefinement($latest, $isStale);
+        return $report->refinedReports()
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(function ($refinement) use ($report, $baseReportIsStale) {
+                $isStale = $baseReportIsStale || (($report->signature ?? '') !== ($refinement->source_signature ?? ''));
+                return $this->serializeRefinement($refinement, $isStale);
+            })
+            ->values()
+            ->all();
     }
 
     protected function serializeRefinement(RefinedReport $refinement, bool $isStale): array
