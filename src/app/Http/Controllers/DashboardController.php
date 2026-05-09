@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Models\Entry;
 use App\Models\GeneratedReport;
+use App\Models\RefinedReport;
 use App\Models\User;
 use App\Services\PromptService;
 use App\Services\SummarizerService;
@@ -213,12 +214,15 @@ class DashboardController extends Controller
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
                 $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
+                $savedRefinements = $this->serializeAllRefinements($cached, $stale);
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Standup Report',
                         'date' => $date,
                         'html' => $html,
                         'markdown' => $cached->content,
+                        'reportId' => $cached->id,
+                        'savedRefinements' => $savedRefinements,
                         'stale' => $stale,
                         'engineLabel' => $engineLabel,
                     ]);
@@ -251,12 +255,21 @@ class DashboardController extends Controller
 
         $html = Str::markdown($markdown);
         $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
+        $savedReport = !$result['isFallback']
+            ? GeneratedReport::where('user_id', Auth::id())
+                ->where('report_type', 'daily')
+                ->where('date', $date)
+                ->where('engine', $engine)
+                ->first()
+            : null;
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Standup Report',
                 'date' => $date,
                 'html' => $html,
                 'markdown' => $markdown,
+                'reportId' => $savedReport?->id,
+                'savedRefinements' => $savedReport ? $this->serializeAllRefinements($savedReport, false) : [],
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
@@ -299,6 +312,7 @@ class DashboardController extends Controller
                 $stale = $cached->signature !== $signature;
                 $html = Str::markdown($cached->content);
                 $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
+                $savedRefinements = $this->serializeAllRefinements($cached, $stale);
                 if ($request->ajax() || $request->wantsJson()) {
                     return response()->json([
                         'title' => 'Weekly Report',
@@ -306,6 +320,8 @@ class DashboardController extends Controller
                         'end' => $cached->end_date->toDateString(),
                         'html' => $html,
                         'markdown' => $cached->content,
+                        'reportId' => $cached->id,
+                        'savedRefinements' => $savedRefinements,
                         'stale' => $stale,
                         'engineLabel' => $engineLabel,
                     ]);
@@ -343,6 +359,14 @@ class DashboardController extends Controller
 
         $html = Str::markdown($markdown);
         $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
+        $savedReport = !$result['isFallback']
+            ? GeneratedReport::where('user_id', Auth::id())
+                ->where('report_type', 'weekly')
+                ->where('start_date', $start->toDateString())
+                ->where('end_date', $end->toDateString())
+                ->where('engine', $engine)
+                ->first()
+            : null;
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'title' => 'Weekly Report',
@@ -350,6 +374,8 @@ class DashboardController extends Controller
                 'end' => $end->toDateString(),
                 'html' => $html,
                 'markdown' => $markdown,
+                'reportId' => $savedReport?->id,
+                'savedRefinements' => $savedReport ? $this->serializeAllRefinements($savedReport, false) : [],
                 'stale' => false,
                 'isFallback' => $result['isFallback'],
                 'error' => $result['error'],
@@ -357,6 +383,52 @@ class DashboardController extends Controller
             ]);
         }
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));
+    }
+
+    public function refineReport(Request $request, SummarizerService $sum)
+    {
+        $data = $request->validate([
+            'generated_report_id' => ['required', 'integer', 'exists:generated_reports,id'],
+            'markdown' => ['required', 'string'],
+            'mode' => ['required', 'string', Rule::in(['shorten', 'bulletize', 'executive', 'blockers', 'slack', 'custom'])],
+            'instruction' => ['nullable', 'string', 'max:500'],
+            'engine' => ['nullable', 'string'],
+        ]);
+
+        $report = GeneratedReport::whereKey($data['generated_report_id'])
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        $result = $sum->refineReport(
+            $data['markdown'],
+            $data['mode'],
+            $data['instruction'] ?? null,
+            $data['engine'] ?? null
+        );
+
+        $prompt = trim((string) ($data['instruction'] ?? ''));
+        $promptHash = $prompt !== '' ? hash('sha256', mb_strtolower($prompt)) : hash('sha256', $data['mode']);
+        $refinedReport = RefinedReport::updateOrCreate(
+            [
+                'generated_report_id' => $report->id,
+                'mode' => $data['mode'],
+                'prompt_hash' => $promptHash,
+            ],
+            [
+                'prompt' => $prompt !== '' ? $prompt : null,
+                'content' => $result['content'],
+                'engine' => $data['engine'] ?? null,
+                'source_signature' => $report->signature ?? '',
+            ]
+        );
+
+        return response()->json([
+            'markdown' => $result['content'],
+            'html' => Str::markdown($result['content']),
+            'isFallback' => $result['isFallback'],
+            'error' => $result['error'],
+            'savedRefinements' => $this->serializeAllRefinements($report, false),
+        ]);
     }
 
     protected function determineAvailableEngines(): array
@@ -428,5 +500,32 @@ class DashboardController extends Controller
             'start' => $start,
             'end' => $end,
         ]);
+    }
+
+    protected function serializeAllRefinements(GeneratedReport $report, bool $baseReportIsStale): array
+    {
+        return $report->refinedReports()
+            ->orderBy('updated_at', 'desc')
+            ->get()
+            ->map(function ($refinement) use ($report, $baseReportIsStale) {
+                $isStale = $baseReportIsStale || (($report->signature ?? '') !== ($refinement->source_signature ?? ''));
+                return $this->serializeRefinement($refinement, $isStale);
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function serializeRefinement(RefinedReport $refinement, bool $isStale): array
+    {
+        return [
+            'id' => $refinement->id,
+            'mode' => $refinement->mode,
+            'prompt' => $refinement->prompt,
+            'markdown' => $refinement->content,
+            'html' => Str::markdown($refinement->content),
+            'engine' => $refinement->engine,
+            'stale' => $isStale,
+            'updatedAt' => optional($refinement->updated_at)?->toDateTimeString(),
+        ];
     }
 }

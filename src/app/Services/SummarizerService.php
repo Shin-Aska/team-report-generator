@@ -150,6 +150,54 @@ class SummarizerService
     }
 
     /**
+     * Refine the generated standup/weekly report while preserving non-summary sections.
+     *
+     * @return array{content: string, isFallback: bool, error: string|null}
+     */
+    public function refineReport(string $markdown, string $mode, ?string $instruction = null, ?string $engine = null): array
+    {
+        $parts = $this->splitSummarySection($markdown);
+        $summary = trim($parts['summary']);
+        if ($summary === '') {
+            return [
+                'content' => $markdown,
+                'isFallback' => true,
+                'error' => 'Could not find a summary section to refine.',
+            ];
+        }
+
+        $prompt = $this->buildRefinementPrompt($summary, $mode, $instruction);
+        $lastError = null;
+        $refined = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt, $lastError);
+        $usedFallback = false;
+
+        if (!$refined) {
+            $refined = $this->fallbackRefineSummary($summary, $mode, $instruction);
+            if (!$refined) {
+                return [
+                    'content' => $markdown,
+                    'isFallback' => true,
+                    'error' => $lastError ?? 'Unable to refine the report.',
+                ];
+            }
+            $usedFallback = true;
+        }
+
+        $refined = trim($this->stripMarkdownFences($refined));
+        $content = rtrim($parts['prefix']);
+        $content .= "\n\n" . $refined;
+        if ($parts['suffix'] !== '') {
+            $content .= "\n\n" . ltrim($parts['suffix']);
+        }
+
+        return [
+            'content' => trim($content) . "\n",
+            'isFallback' => $usedFallback,
+            'error' => $usedFallback ? ($lastError ?? 'AI refinement was unavailable, so a lightweight fallback rewrite was used.') : null,
+        ];
+    }
+
+    /**
      * Determine the preferred engine order based on the provided hint.
      *
      * @return array<int, string>
@@ -413,5 +461,172 @@ class SummarizerService
         }
         // Append at the end
         return rtrim($text) . "\n\n" . $header . "\n" . trim($tickets) . "\n";
+    }
+
+    /**
+     * @return array{prefix: string, summary: string, suffix: string}
+     */
+    protected function splitSummarySection(string $markdown): array
+    {
+        $normalized = str_replace("\r\n", "\n", $markdown);
+        if (!preg_match('/^# Summary\s*$/mi', $normalized, $matches, PREG_OFFSET_CAPTURE)) {
+            return ['prefix' => trim($normalized), 'summary' => '', 'suffix' => ''];
+        }
+
+        $headerPos = $matches[0][1];
+        $headerText = $matches[0][0];
+        $summaryStart = $headerPos + strlen($headerText);
+        $afterHeader = ltrim(substr($normalized, $summaryStart), "\n");
+
+        $boundaryPos = strpos($afterHeader, "\n---\n");
+        if ($boundaryPos === false) {
+            $boundaryPos = strpos($afterHeader, "\n## ");
+        }
+        if ($boundaryPos === false) {
+            $boundaryPos = strlen($afterHeader);
+        }
+
+        return [
+            'prefix' => trim(substr($normalized, 0, $summaryStart)),
+            'summary' => trim(substr($afterHeader, 0, $boundaryPos)),
+            'suffix' => trim(substr($afterHeader, $boundaryPos)),
+        ];
+    }
+
+    protected function buildRefinementPrompt(string $summary, string $mode, ?string $instruction = null): string
+    {
+        $base = [
+            'You are refining the spoken standup summary section of an internal engineering report.',
+            'Rewrite only the provided summary content.',
+            'Preserve factual meaning, names, risks, and timeline signal.',
+            'Do not invent work, blockers, or stakeholders.',
+            'Return plain Markdown only with no surrounding code fences.',
+        ];
+
+        $modeInstructions = match ($mode) {
+            'shorten' => [
+                'Make it shorter and tighter.',
+                'Keep it to 2-3 short paragraphs.',
+                'Remove repetition and filler.',
+            ],
+            'bulletize' => [
+                'Convert it into concise bullet points.',
+                'Use one flat Markdown bullet list.',
+                'Keep each bullet to one sentence where possible.',
+            ],
+            'executive' => [
+                'Rewrite it for leadership.',
+                'Focus on delivery status, risk, and upcoming milestones.',
+                'Keep it crisp and low-noise.',
+            ],
+            'blockers' => [
+                'Emphasize blockers, dependencies, risks, and follow-up owners.',
+                'Keep successful work brief and put the risk signal first.',
+            ],
+            'slack' => [
+                'Rewrite it as a Slack-ready team update.',
+                'Use a compact, friendly tone.',
+                'Prefer bullets and keep it easy to skim.',
+            ],
+            'custom' => [
+                'Apply the user instruction carefully.',
+                'If the instruction conflicts with the source facts, preserve the facts.',
+                'User instruction: ' . trim((string) $instruction),
+            ],
+            default => [
+                'Make it clearer and easier to skim.',
+            ],
+        };
+
+        $lines = array_merge($base, $modeInstructions, [
+            '',
+            'Summary to refine:',
+            '```markdown',
+            trim($summary),
+            '```',
+        ]);
+
+        return implode("\n", $lines);
+    }
+
+    protected function fallbackRefineSummary(string $summary, string $mode, ?string $instruction = null): ?string
+    {
+        $clean = preg_replace('/\s+/', ' ', trim($summary));
+        if (!$clean) {
+            return null;
+        }
+
+        return match ($mode) {
+            'shorten' => $this->fallbackShorten($summary),
+            'bulletize', 'slack' => $this->fallbackBulletize($summary),
+            'executive' => $this->fallbackExecutive($summary),
+            'blockers' => $this->fallbackBlockers($summary),
+            'custom' => $this->fallbackBulletize($summary),
+            default => $summary,
+        };
+    }
+
+    protected function fallbackShorten(string $summary): string
+    {
+        $paragraphs = preg_split('/\n\s*\n/', trim($summary)) ?: [];
+        $paragraphs = array_values(array_filter(array_map('trim', $paragraphs)));
+        $paragraphs = array_slice($paragraphs, 0, 2);
+
+        return implode("\n\n", array_map(function (string $paragraph) {
+            $sentences = preg_split('/(?<=[.!?])\s+/', preg_replace('/\s+/', ' ', $paragraph)) ?: [];
+            return trim(implode(' ', array_slice($sentences, 0, 2)));
+        }, $paragraphs));
+    }
+
+    protected function fallbackBulletize(string $summary): string
+    {
+        $paragraphs = preg_split('/\n\s*\n/', trim($summary)) ?: [];
+        $bullets = [];
+
+        foreach ($paragraphs as $paragraph) {
+            $sentence = trim((string) preg_split('/(?<=[.!?])\s+/', preg_replace('/\s+/', ' ', $paragraph), 2)[0]);
+            if ($sentence !== '') {
+                $bullets[] = '- ' . $sentence;
+            }
+        }
+
+        return implode("\n", $bullets);
+    }
+
+    protected function fallbackExecutive(string $summary): string
+    {
+        $bullets = preg_split('/\n/', $this->fallbackBulletize($summary)) ?: [];
+        $bullets = array_slice(array_values(array_filter(array_map('trim', $bullets))), 0, 4);
+        return implode("\n", $bullets);
+    }
+
+    protected function fallbackBlockers(string $summary): string
+    {
+        $sentences = preg_split('/(?<=[.!?])\s+/', preg_replace('/\s+/', ' ', trim($summary))) ?: [];
+        $prioritized = [];
+
+        foreach ($sentences as $sentence) {
+            if (preg_match('/block|risk|issue|flag|dependency|staging|failing/i', $sentence)) {
+                $prioritized[] = '- ' . trim($sentence);
+            }
+        }
+
+        if (empty($prioritized) && isset($sentences[0])) {
+            $prioritized[] = '- ' . trim($sentences[0]);
+        }
+
+        return implode("\n", $prioritized);
+    }
+
+    protected function stripMarkdownFences(string $text): string
+    {
+        $trimmed = trim($text);
+        if (str_starts_with($trimmed, '```markdown') && str_ends_with($trimmed, '```')) {
+            return trim(substr($trimmed, strlen('```markdown'), -strlen('```')));
+        }
+        if (str_starts_with($trimmed, '```') && str_ends_with($trimmed, '```')) {
+            return trim(substr($trimmed, strlen('```'), -strlen('```')));
+        }
+        return $trimmed;
     }
 }

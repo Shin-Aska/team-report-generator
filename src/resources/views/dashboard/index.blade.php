@@ -8,6 +8,17 @@
   .avatar-sm { width: 40px; height: 40px; border-radius: 50%; background: var(--bs-primary-bg-subtle, #e7f1ff); display: inline-flex; align-items:center; justify-content:center; font-weight:600; color: var(--bs-primary, #0d6efd); font-size: .95rem; }
   .team-list .list-group-item { border: 0; border-bottom: 1px solid rgba(0,0,0,.05); }
   .team-list .status-icon { font-size: 1.1rem; }
+  .report-controls { background: linear-gradient(180deg, rgba(13,110,253,.06), rgba(13,110,253,.02)); border: 1px solid rgba(13,110,253,.14); border-radius: .85rem; }
+  .report-section { border: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,.08)); border-radius: 1rem; padding: 1rem 1.1rem; background: var(--bs-body-bg); box-shadow: 0 10px 30px rgba(0,0,0,.03); }
+  .report-section + .report-section { margin-top: 1rem; }
+  .report-section-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+  .report-section-label { font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; color: var(--bs-secondary-color, #6c757d); font-weight: 700; }
+  .report-section h1,
+  .report-section h2,
+  .report-section h3 { margin: 0; }
+  .report-section-primary { border-left: 4px solid var(--bs-primary, #0d6efd); }
+  .report-section-secondary { border-left: 4px solid var(--bs-info, #0dcaf0); }
+  .report-section-tertiary { border-left: 4px solid var(--bs-secondary, #6c757d); }
 </style>
 <div class="row g-4 d-none">
   <div class="col-12">
@@ -154,6 +165,30 @@
         <div class="modal-body">
           <div class="mb-2">
             <span class="badge bg-secondary" id="engineLabelBadge">Engine</span>
+          </div>
+          <div class="report-controls p-3 mb-3 d-none" id="reportRefinePanel">
+            <div class="d-flex flex-column gap-3">
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="small text-muted">Refine spoken summary:</span>
+                <button class="btn btn-sm btn-outline-primary" id="refineShortenBtn" type="button">Shorten</button>
+                <button class="btn btn-sm btn-outline-primary" id="refineBulletizeBtn" type="button">Bulletize</button>
+                <button class="btn btn-sm btn-outline-primary" id="refineExecutiveBtn" type="button">Exec View</button>
+                <button class="btn btn-sm btn-outline-primary" id="refineBlockersBtn" type="button">Blockers First</button>
+                <button class="btn btn-sm btn-outline-primary" id="refineSlackBtn" type="button">Slack Style</button>
+                <button class="btn btn-sm btn-outline-secondary d-none" id="refineResetBtn" type="button">Reset</button>
+              </div>
+              <div class="d-flex gap-2 align-items-start flex-column flex-md-row">
+                <input class="form-control" id="refinePromptInput" type="text" maxlength="500" placeholder="Refine this report... e.g. make it less formal and 5 bullets max">
+                <button class="btn btn-primary" id="refinePromptBtn" type="button">Apply Prompt</button>
+              </div>
+              <div id="savedRefinementsList" class="d-none mt-2">
+                <div class="small fw-semibold text-muted mb-2">Saved Versions:</div>
+                <div class="d-flex flex-column gap-2" id="savedRefinementsContainer">
+                  <!-- dynamic versions will go here -->
+                </div>
+              </div>
+              <div class="small text-muted d-none" id="reportRefineStatus"></div>
+            </div>
           </div>
           <div class="alert alert-warning d-none" id="staleAlert" role="alert">
             <div class="d-flex align-items-center justify-content-between">
@@ -645,6 +680,19 @@
   const modalHeader = document.querySelector('#reportModal .modal-header');
   const editorLoading = document.getElementById('editorLoadingNew') || document.getElementById('editorLoading');
   const previousEntryData = @json($previousEntryData);
+  const reportRefinePanel = document.getElementById('reportRefinePanel');
+  const reportRefineStatus = document.getElementById('reportRefineStatus');
+  const refinePromptInput = document.getElementById('refinePromptInput');
+  const reportState = {
+    kind: null,
+    generatedReportId: null,
+    originalHtml: '',
+    originalMarkdown: '',
+    currentHtml: '',
+    currentMarkdown: '',
+    engine: null,
+    savedRefinements: [],
+  };
 
   const copyPrevBtn = document.getElementById('copyPreviousUpdateBtn');
   if (copyPrevBtn){
@@ -739,10 +787,255 @@
     }
   }
 
+  function setRefineStatus(message = '', tone = 'muted'){
+    if (!reportRefineStatus) return;
+    reportRefineStatus.classList.toggle('d-none', !message);
+    reportRefineStatus.classList.remove('text-muted', 'text-danger', 'text-success');
+    reportRefineStatus.classList.add(tone === 'error' ? 'text-danger' : tone === 'success' ? 'text-success' : 'text-muted');
+    reportRefineStatus.textContent = message;
+  }
+
+  function setRefinePanelVisible(visible){
+    if (!reportRefinePanel) return;
+    reportRefinePanel.classList.toggle('d-none', !visible);
+  }
+
+  function toggleRefineBusy(busy){
+    [
+      'refineShortenBtn',
+      'refineBulletizeBtn',
+      'refineExecutiveBtn',
+      'refineBlockersBtn',
+      'refineSlackBtn',
+      'refineResetBtn',
+      'refinePromptBtn',
+      'refinePromptInput'
+    ].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !!busy;
+    });
+  }
+
+  function hasReportChanged(){
+    return !!reportState.originalMarkdown && reportState.currentMarkdown !== reportState.originalMarkdown;
+  }
+
+  function updateResetButton(){
+    const btn = document.getElementById('refineResetBtn');
+    if (!btn) return;
+    btn.classList.toggle('d-none', !hasReportChanged());
+  }
+
+  function getRefinementLabel(refinement){
+    if (!refinement) return '';
+    if (refinement.mode === 'custom') {
+      return refinement.prompt ? `Custom: ${refinement.prompt}` : 'Custom refinement';
+    }
+    return ({
+      shorten: 'Shorten',
+      bulletize: 'Bulletize',
+      executive: 'Exec View',
+      blockers: 'Blockers First',
+      slack: 'Slack Style'
+    })[refinement.mode] || refinement.mode;
+  }
+
+  function renderSavedRefinements(){
+    const container = document.getElementById('savedRefinementsContainer');
+    const listWrapper = document.getElementById('savedRefinementsList');
+    if (!container || !listWrapper) return;
+    
+    const refinements = reportState.savedRefinements || [];
+    if (refinements.length === 0) {
+      listWrapper.classList.add('d-none');
+      return;
+    }
+    
+    listWrapper.classList.remove('d-none');
+    container.innerHTML = '';
+    
+    refinements.forEach(ref => {
+      const label = getRefinementLabel(ref);
+      const staleBadge = ref.stale ? '<span class="badge bg-warning text-dark ms-2">Stale</span>' : '';
+      
+      const div = document.createElement('div');
+      div.className = 'd-flex align-items-center justify-content-between p-2 subcard';
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.className = 'small fw-medium';
+      nameDiv.innerHTML = `${escapeHtml(label)}${staleBadge}`;
+      
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'd-flex gap-2';
+      
+      const openBtn = document.createElement('button');
+      openBtn.className = 'btn btn-sm btn-outline-secondary';
+      openBtn.textContent = 'Open';
+      openBtn.onclick = () => {
+        renderReport(ref.html, ref.markdown);
+        setRefineStatus(ref.stale ? `Showing saved version "${label}" (Stale).` : `Showing saved version "${label}".`, ref.stale ? 'muted' : 'success');
+      };
+      
+      const regenBtn = document.createElement('button');
+      regenBtn.className = 'btn btn-sm btn-outline-primary';
+      regenBtn.textContent = 'Regenerate';
+      regenBtn.onclick = () => refineReport(ref.mode, ref.prompt || '', reportState.originalMarkdown);
+      
+      actionsDiv.appendChild(openBtn);
+      actionsDiv.appendChild(regenBtn);
+      
+      div.appendChild(nameDiv);
+      div.appendChild(actionsDiv);
+      
+      container.appendChild(div);
+    });
+  }
+
+  function getCurrentReportHtml(){
+    return document.getElementById('reportHtml')?.innerHTML || '';
+  }
+
+  function renderReport(html, markdown){
+    const root = document.getElementById('reportHtml');
+    if (!root) return;
+    root.innerHTML = html;
+    enhanceReportMarkup(root, reportState.kind);
+    reportState.currentHtml = root.innerHTML;
+    if (typeof markdown === 'string') {
+      reportState.currentMarkdown = markdown;
+      updateResetButton();
+    }
+  }
+
+  function resetReportState(){
+    reportState.kind = null;
+    reportState.generatedReportId = null;
+    reportState.originalHtml = '';
+    reportState.originalMarkdown = '';
+    reportState.currentHtml = '';
+    reportState.currentMarkdown = '';
+    reportState.engine = null;
+    reportState.savedRefinements = [];
+    setRefineStatus('');
+    if (refinePromptInput) refinePromptInput.value = '';
+    renderSavedRefinements();
+  }
+
+  function initializeReportState(kind, markdown, html, generatedReportId, savedRefinements){
+    reportState.kind = kind;
+    reportState.generatedReportId = generatedReportId || null;
+    reportState.originalHtml = html || '';
+    reportState.originalMarkdown = markdown || '';
+    reportState.currentHtml = html || '';
+    reportState.currentMarkdown = markdown || '';
+    reportState.engine = getSelectedEngine();
+    reportState.savedRefinements = savedRefinements || [];
+    setRefinePanelVisible(kind === 'daily' || kind === 'weekly');
+    if (reportState.savedRefinements.length > 0) {
+      const activeCount = reportState.savedRefinements.filter(r => !r.stale).length;
+      setRefineStatus(activeCount > 0 ? `${reportState.savedRefinements.length} saved version(s) available.` : `${reportState.savedRefinements.length} saved version(s) available, but some/all are stale.`, activeCount > 0 ? 'success' : 'muted');
+    } else {
+      setRefineStatus(kind === 'daily' ? 'Tip: refine the spoken summary without regenerating the whole report.' : '');
+    }
+    updateResetButton();
+    renderSavedRefinements();
+  }
+
+  function enhanceReportMarkup(root, kind){
+    if (!(root instanceof HTMLElement)) return;
+    const children = Array.from(root.children);
+    children.forEach(node => {
+      if (node.tagName === 'HR') node.remove();
+    });
+
+    let currentSection = null;
+    Array.from(root.children).forEach(node => {
+      if (!/^H[1-3]$/.test(node.tagName)) {
+        if (currentSection) currentSection.appendChild(node);
+        return;
+      }
+
+      const title = (node.textContent || '').trim().toLowerCase();
+      const section = document.createElement('section');
+      section.className = 'report-section';
+      let sectionType = 'other';
+      let label = node.textContent || '';
+      let eyebrow = 'Report Section';
+
+      if (title === 'summary') {
+        section.classList.add('report-section-primary');
+        sectionType = 'summary';
+        label = kind === 'daily' ? 'Spoken Standup' : 'Key Summary';
+        eyebrow = 'Primary View';
+      } else if (title === 'briefdown') {
+        section.classList.add('report-section-secondary');
+        sectionType = 'briefdown';
+        label = 'Structured Notes';
+        eyebrow = 'Details';
+      } else if (title === 'tickets') {
+        section.classList.add('report-section-tertiary');
+        sectionType = 'tickets';
+        label = 'Tickets';
+        eyebrow = 'Tracking';
+      }
+
+      section.dataset.sectionType = sectionType;
+
+      const header = document.createElement('div');
+      header.className = 'report-section-header';
+      header.innerHTML = `<div><div class="report-section-label">${eyebrow}</div><h2 class="h3 mb-0">${escapeHtml(label)}</h2></div>`;
+      section.appendChild(header);
+      root.appendChild(section);
+      currentSection = section;
+      node.remove();
+    });
+  }
+
+  async function refineReport(mode, instruction = '', sourceMarkdown = null){
+    const markdownSource = sourceMarkdown ?? reportState.currentMarkdown;
+    if (!markdownSource || !reportState.generatedReportId) return;
+    toggleRefineBusy(true);
+    setRefineStatus('Refining report...', 'muted');
+    try {
+      const res = await fetch(`{{ route('reports.refine') }}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': @json(csrf_token()),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+          generated_report_id: reportState.generatedReportId,
+          markdown: markdownSource,
+          mode,
+          instruction,
+          engine: getSelectedEngine()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Refinement failed.');
+      }
+      renderReport(data.html, data.markdown);
+      reportState.savedRefinements = data.savedRefinements || [];
+      renderSavedRefinements();
+      
+      const newRef = reportState.savedRefinements.find(r => r.mode === mode && r.prompt === (instruction || null));
+      const actionLabel = getRefinementLabel(newRef || { mode, prompt: instruction });
+      setRefineStatus(data.isFallback ? `Saved ${actionLabel}, using a lightweight fallback rewrite because the AI refinement step was unavailable.` : `Saved ${actionLabel}.`, data.isFallback ? 'muted' : 'success');
+    } catch (error) {
+      setRefineStatus(error.message || 'Refinement failed.', 'error');
+    } finally {
+      toggleRefineBusy(false);
+    }
+  }
+
   // Reuse a single Bootstrap Modal instance and clean up stray backdrops on hide
   const reportModalEl = document.getElementById('reportModal');
   if (reportModalEl) {
     reportModalEl.addEventListener('hidden.bs.modal', function () {
+      resetReportState();
+      setRefinePanelVisible(false);
       document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.remove(); });
       document.body.classList.remove('modal-open');
       document.body.style.removeProperty('padding-right');
@@ -760,14 +1053,15 @@
       const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
+      initializeReportState('daily', data.markdown, data.html, data.reportId, data.savedRefinements);
       document.getElementById('reportTitle').innerText = data.title + ' - ' + date;
-      document.getElementById('reportHtml').innerHTML = data.html;
+      renderReport(data.html, data.markdown);
       const engineBadge = document.getElementById('engineLabelBadge');
       if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      copyBtn.onclick = () => navigator.clipboard.writeText(buildReportMarkdownForCopy(reportState.currentMarkdown || data.markdown));
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(data.html);
+      copyHtmlBtn.onclick = () => copyFormatted(buildReportHtmlForCopy(document.getElementById('reportHtml')));
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateDaily(true);
       setStaleAlert(data.stale === true, () => generateDaily(true));
@@ -809,14 +1103,15 @@
       const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
+      initializeReportState('weekly', data.markdown, data.html, data.reportId, data.savedRefinements);
       document.getElementById('reportTitle').innerText = data.title + ` (${data.start} → ${data.end})`;
-      document.getElementById('reportHtml').innerHTML = data.html;
+      renderReport(data.html, data.markdown);
       const engineBadge = document.getElementById('engineLabelBadge');
       if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(data.markdown);
+      copyBtn.onclick = () => navigator.clipboard.writeText(buildReportMarkdownForCopy(reportState.currentMarkdown || data.markdown));
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(data.html);
+      copyHtmlBtn.onclick = () => copyFormatted(buildReportHtmlForCopy(document.getElementById('reportHtml')));
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateWeekly(true);
       setStaleAlert(data.stale === true, () => generateWeekly(true));
@@ -853,6 +1148,10 @@
       const res = await fetch(`{{ route('statuses.date') }}?date=${encodeURIComponent(date)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
+      resetReportState();
+      setRefinePanelVisible(false);
+      setStaleAlert(false);
+      setFallbackAlert(false);
       document.getElementById('reportTitle').innerText = `Statuses - ${date}`;
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
@@ -879,6 +1178,10 @@
       const res = await fetch(`{{ route('statuses.range') }}?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
       if (modalHeader) modalHeader.classList.add('d-none'); // hide header for statuses
+      resetReportState();
+      setRefinePanelVisible(false);
+      setStaleAlert(false);
+      setFallbackAlert(false);
       document.getElementById('reportTitle').innerText = `Statuses - ${data.start} - ${data.end}`;
       document.getElementById('reportHtml').innerHTML = data.html;
       initStatusFilters(document.getElementById('reportHtml'));
@@ -956,6 +1259,42 @@
       if (rows.length) sections.push(`<h3>${escapeHtml(date)}</h3>${rows.join('')}`);
     });
     return sections.join('') || container.innerHTML;
+  }
+
+  function stripSummarySectionFromMarkdown(markdown){
+    if (!markdown) return '';
+
+    const normalized = markdown.replace(/\r\n/g, '\n').trim();
+    const summaryHeader = normalized.match(/^# Summary\s*$/m);
+    if (!summaryHeader || summaryHeader.index === undefined) {
+      return normalized;
+    }
+
+    const start = summaryHeader.index;
+    const rest = normalized.slice(start);
+    const boundaryMatch = rest.match(/\n(?:---\s*\n|#\s+|##\s+)/);
+    const end = boundaryMatch && boundaryMatch.index !== undefined
+      ? start + boundaryMatch.index + 1
+      : normalized.length;
+
+    const before = normalized.slice(0, start).trim();
+    let after = normalized.slice(end).trim();
+    after = after.replace(/^---\s*/m, '').trim();
+
+    return [before, after].filter(Boolean).join('\n\n').trim();
+  }
+
+  function buildReportMarkdownForCopy(markdown){
+    return stripSummarySectionFromMarkdown(markdown || '');
+  }
+
+  function buildReportHtmlForCopy(root){
+    const container = root instanceof HTMLElement ? root.cloneNode(true) : null;
+    if (!container) return '';
+
+    container.querySelectorAll('[data-section-type="summary"]').forEach(section => section.remove());
+
+    return container.innerHTML.trim();
   }
 
   async function copyFormatted(source){
@@ -1126,5 +1465,25 @@
     if (noneBtn) noneBtn.addEventListener('click', () => { cbs.forEach(cb => cb.checked = false); apply(); });
     apply();
   }
+
+  document.getElementById('refineShortenBtn')?.addEventListener('click', () => refineReport('shorten'));
+  document.getElementById('refineBulletizeBtn')?.addEventListener('click', () => refineReport('bulletize'));
+  document.getElementById('refineExecutiveBtn')?.addEventListener('click', () => refineReport('executive'));
+  document.getElementById('refineBlockersBtn')?.addEventListener('click', () => refineReport('blockers'));
+  document.getElementById('refineSlackBtn')?.addEventListener('click', () => refineReport('slack'));
+  document.getElementById('refinePromptBtn')?.addEventListener('click', () => {
+    const instruction = refinePromptInput?.value.trim() || '';
+    if (!instruction) {
+      setRefineStatus('Add a prompt first, like "5 bullets max" or "make it less formal".', 'error');
+      return;
+    }
+    refineReport('custom', instruction);
+  });
+  document.getElementById('refineResetBtn')?.addEventListener('click', () => {
+    if (!reportState.originalMarkdown) return;
+    renderReport(reportState.originalHtml, reportState.originalMarkdown);
+    setRefineStatus('Restored the original generated report.', 'success');
+    setFallbackAlert(false);
+  });
 </script>
 @endpush
