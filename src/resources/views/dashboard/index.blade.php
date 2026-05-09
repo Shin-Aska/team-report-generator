@@ -958,22 +958,28 @@
       const title = (node.textContent || '').trim().toLowerCase();
       const section = document.createElement('section');
       section.className = 'report-section';
+      let sectionType = 'other';
       let label = node.textContent || '';
       let eyebrow = 'Report Section';
 
       if (title === 'summary') {
         section.classList.add('report-section-primary');
+        sectionType = 'summary';
         label = kind === 'daily' ? 'Spoken Standup' : 'Key Summary';
         eyebrow = 'Primary View';
       } else if (title === 'briefdown') {
         section.classList.add('report-section-secondary');
+        sectionType = 'briefdown';
         label = 'Structured Notes';
         eyebrow = 'Details';
       } else if (title === 'tickets') {
         section.classList.add('report-section-tertiary');
+        sectionType = 'tickets';
         label = 'Tickets';
         eyebrow = 'Tracking';
       }
+
+      section.dataset.sectionType = sectionType;
 
       const header = document.createElement('div');
       header.className = 'report-section-header';
@@ -1053,9 +1059,9 @@
       const engineBadge = document.getElementById('engineLabelBadge');
       if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(reportState.currentMarkdown || data.markdown);
+      copyBtn.onclick = () => navigator.clipboard.writeText(buildReportMarkdownForCopy(reportState.currentMarkdown || data.markdown));
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(getCurrentReportHtml());
+      copyHtmlBtn.onclick = () => copyFormatted(buildReportHtmlForCopy(document.getElementById('reportHtml')));
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateDaily(true);
       setStaleAlert(data.stale === true, () => generateDaily(true));
@@ -1103,9 +1109,9 @@
       const engineBadge = document.getElementById('engineLabelBadge');
       if (engineBadge) engineBadge.textContent = data.engineLabel || 'Default';
       const copyBtn = document.getElementById('copyBtn');
-      copyBtn.onclick = () => navigator.clipboard.writeText(reportState.currentMarkdown || data.markdown);
+      copyBtn.onclick = () => navigator.clipboard.writeText(buildReportMarkdownForCopy(reportState.currentMarkdown || data.markdown));
       const copyHtmlBtn = document.getElementById('copyHtmlBtn');
-      copyHtmlBtn.onclick = () => copyFormatted(getCurrentReportHtml());
+      copyHtmlBtn.onclick = () => copyFormatted(buildReportHtmlForCopy(document.getElementById('reportHtml')));
       const regenerateBtn = document.getElementById('regenerateBtn');
       regenerateBtn.onclick = () => generateWeekly(true);
       setStaleAlert(data.stale === true, () => generateWeekly(true));
@@ -1253,6 +1259,42 @@
       if (rows.length) sections.push(`<h3>${escapeHtml(date)}</h3>${rows.join('')}`);
     });
     return sections.join('') || container.innerHTML;
+  }
+
+  function stripSummarySectionFromMarkdown(markdown){
+    if (!markdown) return '';
+
+    const normalized = markdown.replace(/\r\n/g, '\n').trim();
+    const summaryHeader = normalized.match(/^# Summary\s*$/m);
+    if (!summaryHeader || summaryHeader.index === undefined) {
+      return normalized;
+    }
+
+    const start = summaryHeader.index;
+    const rest = normalized.slice(start);
+    const boundaryMatch = rest.match(/\n(?:---\s*\n|#\s+|##\s+)/);
+    const end = boundaryMatch && boundaryMatch.index !== undefined
+      ? start + boundaryMatch.index + 1
+      : normalized.length;
+
+    const before = normalized.slice(0, start).trim();
+    let after = normalized.slice(end).trim();
+    after = after.replace(/^---\s*/m, '').trim();
+
+    return [before, after].filter(Boolean).join('\n\n').trim();
+  }
+
+  function buildReportMarkdownForCopy(markdown){
+    return stripSummarySectionFromMarkdown(markdown || '');
+  }
+
+  function buildReportHtmlForCopy(root){
+    const container = root instanceof HTMLElement ? root.cloneNode(true) : null;
+    if (!container) return '';
+
+    container.querySelectorAll('[data-section-type="summary"]').forEach(section => section.remove());
+
+    return container.innerHTML.trim();
   }
 
   async function copyFormatted(source){
