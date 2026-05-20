@@ -1036,10 +1036,31 @@
     reportModalEl.addEventListener('hidden.bs.modal', function () {
       resetReportState();
       setRefinePanelVisible(false);
+      clearAllPendingReports();
       document.querySelectorAll('.modal-backdrop').forEach(function (el) { el.remove(); });
       document.body.classList.remove('modal-open');
       document.body.style.removeProperty('padding-right');
       document.body.style.removeProperty('overflow');
+    });
+  }
+
+  function setPendingDaily(){
+    const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    sessionStorage.setItem('reportgen_pending_daily_' + date, JSON.stringify({ts: Date.now()}));
+  }
+  function clearPendingDaily(){
+    const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    sessionStorage.removeItem('reportgen_pending_daily_' + date);
+  }
+  function setPendingWeekly(start, end){
+    sessionStorage.setItem('reportgen_pending_weekly_' + start + '_' + end, JSON.stringify({ts: Date.now(), start: start, end: end}));
+  }
+  function clearPendingWeekly(start, end){
+    sessionStorage.removeItem('reportgen_pending_weekly_' + start + '_' + end);
+  }
+  function clearAllPendingReports(){
+    Object.keys(sessionStorage).forEach(function(key){
+      if (key.indexOf('reportgen_pending_') === 0) sessionStorage.removeItem(key);
     });
   }
 
@@ -1049,6 +1070,7 @@
     const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
     const regenParam = regenerate ? '&regenerate=1' : '';
     showLoading('Generating daily report…');
+    setPendingDaily();
     try {
       const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
@@ -1068,8 +1090,10 @@
       setFallbackAlert(data.isFallback === true, data.error);
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
+      clearPendingDaily();
     } finally {
       hideLoading();
+      clearPendingDaily();
     }
   }
 
@@ -1099,6 +1123,7 @@
     const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
     const regenParam = regenerate ? '&regenerate=1' : '';
     showLoading('Generating weekly report…');
+    setPendingWeekly(range.start, range.end);
     try {
       const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       const data = await res.json();
@@ -1118,8 +1143,10 @@
       setFallbackAlert(data.isFallback === true, data.error);
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
+      clearPendingWeekly(range.start, range.end);
     } finally {
       hideLoading();
+      clearPendingWeekly(range.start, range.end);
     }
   }
 
@@ -1390,6 +1417,49 @@
     });
   }
 
+  async function recoverPendingReports(){
+    const MAX_AGE = 10 * 60 * 1000; // 10 minutes
+    const now = Date.now();
+    const date = new URLSearchParams(window.location.search).get('date') || '{{ $date }}';
+    const dailyKey = 'reportgen_pending_daily_' + date;
+    const dailyRaw = sessionStorage.getItem(dailyKey);
+    if (dailyRaw){
+      try {
+        const daily = JSON.parse(dailyRaw);
+        if (daily && daily.ts && (now - daily.ts) < MAX_AGE){
+          sessionStorage.removeItem(dailyKey);
+          await generateDaily();
+          return;
+        }
+      } catch(e){}
+      sessionStorage.removeItem(dailyKey);
+    }
+    Object.keys(sessionStorage).forEach(function(key){
+      if (key.indexOf('reportgen_pending_weekly_') === 0){
+        const raw = sessionStorage.getItem(key);
+        if (raw){
+          try {
+            const w = JSON.parse(raw);
+            if (w && w.ts && (now - w.ts) < MAX_AGE){
+              sessionStorage.removeItem(key);
+              const sNew = document.getElementById('weeklyStartNew');
+              const eNew = document.getElementById('weeklyEndNew');
+              const sOld = document.getElementById('weeklyStart');
+              const eOld = document.getElementById('weeklyEnd');
+              if (sNew) sNew.value = w.start;
+              if (eNew) eNew.value = w.end;
+              if (sOld) sOld.value = w.start;
+              if (eOld) eOld.value = w.end;
+              generateWeekly();
+              return;
+            }
+          } catch(e){}
+          sessionStorage.removeItem(key);
+        }
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     const hidden = document.getElementById('contentField');
     const el = document.getElementById('richEditor');
@@ -1412,6 +1482,7 @@
       });
     }
     restoreDraft();
+    recoverPendingReports();
   });
 
   // Auto-save draft every 10 seconds and on page unload
