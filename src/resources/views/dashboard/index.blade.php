@@ -1427,11 +1427,13 @@
       try {
         const daily = JSON.parse(dailyRaw);
         if (daily && daily.ts && (now - daily.ts) < MAX_AGE){
-          sessionStorage.removeItem(dailyKey);
+          // Do NOT clear the marker here — let generateDaily clear it on success.
+          // If the tab is discarded during the fetch, the marker survives
+          // and recovery will retry on the next page load.
           await generateDaily();
           return;
         }
-      } catch(e){}
+      } catch(e){ console.error('Daily recovery failed:', e); }
       sessionStorage.removeItem(dailyKey);
     }
     Object.keys(sessionStorage).forEach(function(key){
@@ -1441,7 +1443,6 @@
           try {
             const w = JSON.parse(raw);
             if (w && w.ts && (now - w.ts) < MAX_AGE){
-              sessionStorage.removeItem(key);
               const sNew = document.getElementById('weeklyStartNew');
               const eNew = document.getElementById('weeklyEndNew');
               const sOld = document.getElementById('weeklyStart');
@@ -1453,7 +1454,7 @@
               generateWeekly();
               return;
             }
-          } catch(e){}
+          } catch(e){ console.error('Weekly recovery failed:', e); }
           sessionStorage.removeItem(key);
         }
       }
@@ -1483,6 +1484,12 @@
     }
     restoreDraft();
     recoverPendingReports();
+  });
+  window.addEventListener('pageshow', function(event){
+    // pageshow fires on initial load AND when restored from bfcache or after tab discard
+    if (event.persisted) {
+      recoverPendingReports();
+    }
   });
 
   // Auto-save draft every 10 seconds and on page unload
