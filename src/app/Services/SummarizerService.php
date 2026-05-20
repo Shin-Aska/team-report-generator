@@ -307,7 +307,7 @@ class SummarizerService
     // For template-style prompts that contain all instructions in one text.
     protected function llmTimeoutSeconds(): int
     {
-        return max(1, (int) env('LLM_TIMEOUT_SECONDS', 120));
+        return max(1, (int) env('LLM_TIMEOUT_SECONDS', 600));
     }
 
     protected function callGeminiText(string $text, ?string &$lastError = null): ?string
