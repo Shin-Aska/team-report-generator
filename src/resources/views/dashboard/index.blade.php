@@ -198,7 +198,7 @@
           </div>
           <div class="alert alert-danger d-none" id="fallbackAlert" role="alert">
             <div class="fw-semibold mb-1">Report generation failed</div>
-            <div class="small">The output below is a simple concatenation of entries. The LLM could not generate a summary.</div>
+            <div class="small" id="fallbackAlertBody">The LLM could not generate a summary. The output below is a simple concatenation of entries.</div>
             <div class="small text-muted mt-1" id="fallbackError"></div>
           </div>
           <div class="markdown-preview" id="reportHtml"></div>
@@ -777,13 +777,19 @@
     }
   }
 
-  function setFallbackAlert(isFallback, error){
+  function setFallbackAlert(isFallback, error, isServerError = false){
     const alert = document.getElementById('fallbackAlert');
     const errorEl = document.getElementById('fallbackError');
+    const bodyEl = document.getElementById('fallbackAlertBody');
     if (!alert) return;
     alert.classList.toggle('d-none', !isFallback);
-    if (errorEl && isFallback) {
-      errorEl.textContent = error || '';
+    if (isFallback) {
+      if (bodyEl) {
+        bodyEl.textContent = isServerError
+          ? 'The request failed. This usually means the server timed out waiting for the AI response. You can try again.'
+          : 'The LLM could not generate a summary. The output below is a simple concatenation of entries.';
+      }
+      if (errorEl) errorEl.textContent = error || '';
     }
   }
 
@@ -1073,6 +1079,9 @@
     setPendingDaily();
     try {
       const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
+      }
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       initializeReportState('daily', data.markdown, data.html, data.reportId, data.savedRefinements);
@@ -1091,9 +1100,19 @@
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
       clearPendingDaily();
+    } catch (err) {
+      clearPendingDaily();
+      document.getElementById('reportTitle').innerText = 'Daily Report – Error';
+      if (modalHeader) modalHeader.classList.remove('d-none');
+      document.getElementById('reportHtml').innerHTML = '';
+      setStaleAlert(false);
+      setFallbackAlert(true, err.message || 'The request timed out or failed. Please try again.', true);
+      const regenerateBtn = document.getElementById('regenerateBtn');
+      regenerateBtn.onclick = () => generateDaily(true);
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
+      modal.show();
     } finally {
       hideLoading();
-      clearPendingDaily();
     }
   }
 
@@ -1126,6 +1145,9 @@
     setPendingWeekly(range.start, range.end);
     try {
       const res = await fetch(`{{ route('reports.weekly') }}?start=${encodeURIComponent(range.start)}&end=${encodeURIComponent(range.end)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status} ${res.statusText}`);
+      }
       const data = await res.json();
       if (modalHeader) modalHeader.classList.remove('d-none');
       initializeReportState('weekly', data.markdown, data.html, data.reportId, data.savedRefinements);
@@ -1144,9 +1166,19 @@
       const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
       modal.show();
       clearPendingWeekly(range.start, range.end);
+    } catch (err) {
+      clearPendingWeekly(range.start, range.end);
+      document.getElementById('reportTitle').innerText = 'Weekly Report – Error';
+      if (modalHeader) modalHeader.classList.remove('d-none');
+      document.getElementById('reportHtml').innerHTML = '';
+      setStaleAlert(false);
+      setFallbackAlert(true, err.message || 'The request timed out or failed. Please try again.', true);
+      const regenerateBtn = document.getElementById('regenerateBtn');
+      regenerateBtn.onclick = () => generateWeekly(true);
+      const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('reportModal'));
+      modal.show();
     } finally {
       hideLoading();
-      clearPendingWeekly(range.start, range.end);
     }
   }
 
