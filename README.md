@@ -16,13 +16,14 @@ A Laravel-based team status reporting application. It helps teams capture daily 
 
 ## Repository layout
 
-- `src/` — the Laravel 12 application (PHP 8.2) containing app code, Composer dependencies, and public assets
+- `src/` — the Laravel 12 application (PHP 8.5) containing app code, Composer dependencies, and public assets
 - `src/README.md` — detailed developer guide with setup steps, environment configuration, and directory structure explanations
 - `docs/` — supplementary documentation, including `HOSTING.md` (shared hosting guide), `TEAM_STRUCTURE.md` (operational cadence defaults), `MULTI_TEAM_SETUP.md` (multi-team deployment model), and `prototype.epgz` (Pencil wireframes; open with [Pencil](https://pencil.evolus.vn/))
+- `docs/CODE_ARCHITECTURE.md` — class-by-class application architecture and PHPDoc conventions
 
 ## Requirements
 
-- PHP 8.2+
+- PHP 8.5+
 - Composer 2+
 - MySQL 8+ (or compatible) — configure via `.env`
 - Node.js 18+ and npm (optional, for Vite/dev UX)

@@ -4,9 +4,12 @@ namespace App\Services;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
-use App\Services\DevopsWorkItemsService;
-use App\Services\BusProjectService;
 
+/**
+ * Orchestrate report generation, refinement, and provider fallback.
+ *
+ * Daily generation uses structured-notes and spoken-summary stages. Provider calls are isolated here, and deterministic Markdown fallbacks preserve usable output during outages. Supported engines are Azure, OpenAI, Gemini, and Mistral.
+ */
 class SummarizerService
 {
     /**
@@ -17,9 +20,9 @@ class SummarizerService
     public function summarizeStandup(array $entries, string $date, string $daily1Template, string $daily2Template, ?string $user = null, ?string $engine = null): array
     {
         $concatenated = $this->concatenateEntries($entries, $user);
-        if (!$this->hasMeaningfulUpdates($entries)) {
+        if (! $this->hasMeaningfulUpdates($entries)) {
             try {
-                $adoSummary = (new DevopsWorkItemsService())->getSummary();
+                $adoSummary = (new DevopsWorkItemsService)->getSummary();
                 $ticketsTable = $this->buildTicketsMarkdownTable($adoSummary);
             } catch (\Throwable $e) {
                 $ticketsTable = 'No ticket counts available.';
@@ -30,7 +33,8 @@ class SummarizerService
             $output .= "\n\n---\n\n";
             $output .= "# Briefdown\n\n";
             $output .= "No updates were submitted for {$date}.";
-            $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
+            $output .= "\n\n---\n\n## Tickets\n\n".$ticketsTable;
+
             return ['content' => $output, 'isFallback' => false, 'error' => null];
         }
         // Inject bus projects context into the prompt (only extra block besides concatenated reports)
@@ -42,7 +46,7 @@ class SummarizerService
             } catch (\Throwable $e) {
                 $base = Carbon::now();
             }
-            $busProjects = (new BusProjectService())->summarizeForPrompt($base);
+            $busProjects = (new BusProjectService)->summarizeForPrompt($base);
         } catch (\Throwable $e) {
             $busProjects = 'No bus projects for this month.';
         }
@@ -55,7 +59,7 @@ class SummarizerService
             } catch (\Throwable $e) {
                 $base = Carbon::now();
             }
-            $busyEntryProject = (new BusProjectService())->getPreparedTemplate($base);
+            $busyEntryProject = (new BusProjectService)->getPreparedTemplate($base);
         } catch (\Throwable $e) {
             $busyEntryProject = '- No bus projects for this month.';
         }
@@ -71,7 +75,7 @@ class SummarizerService
         $preferredEngines = $this->resolveEnginePreference($engine);
         $lastError = null;
         $first = $this->callWithPreferredEngines($preferredEngines, $prompt1, $lastError);
-        if (!$first) {
+        if (! $first) {
             return [
                 'content' => $this->fallbackDaily($entries, $date),
                 'isFallback' => true,
@@ -91,7 +95,7 @@ class SummarizerService
         }
 
         try {
-            $adoSummary = (new DevopsWorkItemsService())->getSummary();
+            $adoSummary = (new DevopsWorkItemsService)->getSummary();
             $ticketsTable = $this->buildTicketsMarkdownTable($adoSummary);
         } catch (\Throwable $e) {
             $ticketsTable = 'No ticket counts available.';
@@ -109,7 +113,8 @@ class SummarizerService
             $output .= $first;
         }
         // Append tickets table at the end
-        $output .= "\n\n---\n\n## Tickets\n\n" . $ticketsTable;
+        $output .= "\n\n---\n\n## Tickets\n\n".$ticketsTable;
+
         return ['content' => $output, 'isFallback' => false, 'error' => null];
     }
 
@@ -118,7 +123,7 @@ class SummarizerService
      */
     public function summarizeWeekly(array $entries, string $range, string $weeklyTemplate, ?string $engine = null): array
     {
-        if (!$this->hasMeaningfulUpdates($entries)) {
+        if (! $this->hasMeaningfulUpdates($entries)) {
             return [
                 'content' => "# Weekly Report\nRange: {$range}\n\nNo updates were submitted for this period.",
                 'isFallback' => false,
@@ -134,7 +139,7 @@ class SummarizerService
         }
 
         // Fallback: naive weekly outline
-        $lines = ["# Weekly Report", "Range: {$range}", "", "## Highlights", "- Compiled from team entries.", "", "## Daily Notes"];
+        $lines = ['# Weekly Report', "Range: {$range}", '', '## Highlights', '- Compiled from team entries.', '', '## Daily Notes'];
         foreach ($entries as $e) {
             $date = $e['date'];
             $name = $e['user'];
@@ -142,6 +147,7 @@ class SummarizerService
             $short = mb_substr($content, 0, 300);
             $lines[] = "- [{$date}] {$name}: {$short}";
         }
+
         return [
             'content' => implode("\n", $lines),
             'isFallback' => true,
@@ -171,9 +177,9 @@ class SummarizerService
         $refined = $this->callWithPreferredEngines($this->resolveEnginePreference($engine), $prompt, $lastError);
         $usedFallback = false;
 
-        if (!$refined) {
+        if (! $refined) {
             $refined = $this->fallbackRefineSummary($summary, $mode, $instruction);
-            if (!$refined) {
+            if (! $refined) {
                 return [
                     'content' => $markdown,
                     'isFallback' => true,
@@ -185,13 +191,13 @@ class SummarizerService
 
         $refined = trim($this->stripMarkdownFences($refined));
         $content = rtrim($parts['prefix']);
-        $content .= "\n\n" . $refined;
+        $content .= "\n\n".$refined;
         if ($parts['suffix'] !== '') {
-            $content .= "\n\n" . ltrim($parts['suffix']);
+            $content .= "\n\n".ltrim($parts['suffix']);
         }
 
         return [
-            'content' => trim($content) . "\n",
+            'content' => trim($content)."\n",
             'isFallback' => $usedFallback,
             'error' => $usedFallback ? ($lastError ?? 'AI refinement was unavailable, so a lightweight fallback rewrite was used.') : null,
         ];
@@ -211,6 +217,7 @@ class SummarizerService
         } else {
             $order = $engines;
         }
+
         return $order;
     }
 
@@ -233,13 +240,14 @@ class SummarizerService
             if ($result) {
                 return $result;
             }
-            if ($engineError && !$lastError) {
+            if ($engineError && ! $lastError) {
                 $lastError = $engineError;
             }
         }
-        if (!$lastError) {
+        if (! $lastError) {
             $lastError = 'No LLM engine is configured.';
         }
+
         return null;
     }
 
@@ -249,20 +257,21 @@ class SummarizerService
     protected function buildTicketsMarkdownTable(array $adoSummary): string
     {
         $counts = $adoSummary['counts'] ?? [];
-        if (!is_array($counts) || empty($counts)) {
+        if (! is_array($counts) || empty($counts)) {
             return 'No ticket counts available.';
         }
         $lines = [];
         foreach ($counts as $area => $stateCounts) {
-            $lines[] = 'Area Path: ' . $area;
+            $lines[] = 'Area Path: '.$area;
             $lines[] = '| State | Count |';
             $lines[] = '|:------|------:|';
             foreach ($stateCounts as $state => $count) {
                 $safeState = str_replace('|', '\\|', (string) $state);
-                $lines[] = '| ' . $safeState . ' | ' . (string) $count . ' |';
+                $lines[] = '| '.$safeState.' | '.(string) $count.' |';
             }
             $lines[] = '';
         }
+
         return implode("\n", $lines);
     }
 
@@ -273,8 +282,9 @@ class SummarizerService
             $who = $e['user'] ?? 'Unknown';
             $date = $e['date'] ?? '';
             $content = trim((string) ($e['content'] ?? ''));
-            $parts[] = ($date ? "[{$date}] " : '') . $who . ":\n" . $content;
+            $parts[] = ($date ? "[{$date}] " : '').$who.":\n".$content;
         }
+
         return implode("\n\n---\n\n", $parts);
     }
 
@@ -286,12 +296,13 @@ class SummarizerService
                 return true;
             }
         }
+
         return false;
     }
 
     protected function fallbackDaily(array $entries, string $date): string
     {
-        $lines = ["# Daily Report", "Date: {$date}", ""];
+        $lines = ['# Daily Report', "Date: {$date}", ''];
         foreach ($entries as $e) {
             $name = $e['user'];
             $content = trim(preg_replace('/\s+/', ' ', $e['content']));
@@ -299,8 +310,9 @@ class SummarizerService
             $lines[] = "- {$name}: {$short}";
         }
         if (count($entries) === 0) {
-            $lines[] = "No entries found for this date.";
+            $lines[] = 'No entries found for this date.';
         }
+
         return implode("\n", $lines);
     }
 
@@ -313,14 +325,16 @@ class SummarizerService
     protected function callGeminiText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('GEMINI_API_KEY');
-        if (!$key) {
+        if (! $key) {
             $lastError = 'Gemini: API key not configured.';
+
             return null;
         }
-        $models = ['gemini-3.1-pro', 'gemini-3-flash-preview'];
+        $configuredModel = trim((string) env('GEMINI_MODEL', 'gemini-2.5-pro'));
+        $models = array_values(array_unique(array_filter([$configuredModel, 'gemini-2.5-pro'])));
         foreach ($models as $model) {
             try {
-                $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . urlencode($model) . ':generateContent?key=' . $key;
+                $url = 'https://generativelanguage.googleapis.com/v1beta/models/'.urlencode($model).':generateContent?key='.$key;
                 $payload = ['contents' => [['parts' => [['text' => $text]]]]];
                 $resp = Http::timeout($this->llmTimeoutSeconds())->asJson()->withHeaders(['Accept' => 'application/json'])->post($url, $payload);
                 if ($resp->successful()) {
@@ -329,19 +343,21 @@ class SummarizerService
                         return $candidates[0]['content']['parts'][0]['text'];
                     }
                 }
-                $lastError = 'Gemini: HTTP ' . $resp->status() . ' for model ' . $model . '.';
+                $lastError = 'Gemini: HTTP '.$resp->status().' for model '.$model.'.';
             } catch (\Throwable $e) {
-                $lastError = 'Gemini (' . $model . '): ' . $e->getMessage();
+                $lastError = 'Gemini ('.$model.'): '.$e->getMessage();
             }
         }
+
         return null;
     }
 
     protected function callOpenAIText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('OPENAI_API_KEY');
-        if (!$key) {
+        if (! $key) {
             $lastError = 'OpenAI: API key not configured.';
+
             return null;
         }
         try {
@@ -355,10 +371,11 @@ class SummarizerService
             if ($resp->successful()) {
                 return $resp->json('choices.0.message.content');
             }
-            $lastError = 'OpenAI: HTTP ' . $resp->status() . '.';
+            $lastError = 'OpenAI: HTTP '.$resp->status().'.';
         } catch (\Throwable $e) {
-            $lastError = 'OpenAI: ' . $e->getMessage();
+            $lastError = 'OpenAI: '.$e->getMessage();
         }
+
         return null;
     }
 
@@ -366,8 +383,9 @@ class SummarizerService
     {
         $endpoint = env('AZURE_ENDPOINT');
         $token = env('AZURE_API_KEY');
-        if (!$endpoint || !$token) {
+        if (! $endpoint || ! $token) {
             $lastError = 'Azure: endpoint or API key not configured.';
+
             return null;
         }
 
@@ -390,9 +408,9 @@ class SummarizerService
                     return $content;
                 }
             }
-            $lastError = 'Azure: HTTP ' . $resp->status() . '.';
+            $lastError = 'Azure: HTTP '.$resp->status().'.';
         } catch (\Throwable $e) {
-            $lastError = 'Azure: ' . $e->getMessage();
+            $lastError = 'Azure: '.$e->getMessage();
         }
 
         return null;
@@ -401,8 +419,9 @@ class SummarizerService
     protected function callMistralText(string $text, ?string &$lastError = null): ?string
     {
         $key = env('MISTRAL_API_KEY');
-        if (!$key) {
+        if (! $key) {
             $lastError = 'Mistral: API key not configured.';
+
             return null;
         }
 
@@ -415,6 +434,7 @@ class SummarizerService
                     'messages' => [
                         ['role' => 'user', 'content' => $text],
                     ],
+                    'temperature' => 0.2,
                 ]);
 
             if ($resp->successful()) {
@@ -423,9 +443,9 @@ class SummarizerService
                     return $content;
                 }
             }
-            $lastError = 'Mistral: HTTP ' . $resp->status() . '.';
+            $lastError = 'Mistral: HTTP '.$resp->status().'.';
         } catch (\Throwable $e) {
-            $lastError = 'Mistral: ' . $e->getMessage();
+            $lastError = 'Mistral: '.$e->getMessage();
         }
 
         return null;
@@ -442,7 +462,8 @@ class SummarizerService
             $base = Carbon::now();
         }
         $month = $base->format('F');
-        return str_replace('Goals for [Current Month] Bus:', 'Goals for ' . $month . ' Bus:', $text);
+
+        return str_replace('Goals for [Current Month] Bus:', 'Goals for '.$month.' Bus:', $text);
     }
 
     /**
@@ -457,10 +478,12 @@ class SummarizerService
         if ($pos !== false) {
             // Replace from header to end
             $prefix = mb_substr($text, 0, $pos);
-            return rtrim($prefix) . "\n\n" . $header . "\n" . trim($tickets) . "\n";
+
+            return rtrim($prefix)."\n\n".$header."\n".trim($tickets)."\n";
         }
+
         // Append at the end
-        return rtrim($text) . "\n\n" . $header . "\n" . trim($tickets) . "\n";
+        return rtrim($text)."\n\n".$header."\n".trim($tickets)."\n";
     }
 
     /**
@@ -469,7 +492,7 @@ class SummarizerService
     protected function splitSummarySection(string $markdown): array
     {
         $normalized = str_replace("\r\n", "\n", $markdown);
-        if (!preg_match('/^# Summary\s*$/mi', $normalized, $matches, PREG_OFFSET_CAPTURE)) {
+        if (! preg_match('/^# Summary\s*$/mi', $normalized, $matches, PREG_OFFSET_CAPTURE)) {
             return ['prefix' => trim($normalized), 'summary' => '', 'suffix' => ''];
         }
 
@@ -531,7 +554,7 @@ class SummarizerService
             'custom' => [
                 'Apply the user instruction carefully.',
                 'If the instruction conflicts with the source facts, preserve the facts.',
-                'User instruction: ' . trim((string) $instruction),
+                'User instruction: '.trim((string) $instruction),
             ],
             default => [
                 'Make it clearer and easier to skim.',
@@ -552,7 +575,7 @@ class SummarizerService
     protected function fallbackRefineSummary(string $summary, string $mode, ?string $instruction = null): ?string
     {
         $clean = preg_replace('/\s+/', ' ', trim($summary));
-        if (!$clean) {
+        if (! $clean) {
             return null;
         }
 
@@ -574,6 +597,7 @@ class SummarizerService
 
         return implode("\n\n", array_map(function (string $paragraph) {
             $sentences = preg_split('/(?<=[.!?])\s+/', preg_replace('/\s+/', ' ', $paragraph)) ?: [];
+
             return trim(implode(' ', array_slice($sentences, 0, 2)));
         }, $paragraphs));
     }
@@ -586,7 +610,7 @@ class SummarizerService
         foreach ($paragraphs as $paragraph) {
             $sentence = trim((string) preg_split('/(?<=[.!?])\s+/', preg_replace('/\s+/', ' ', $paragraph), 2)[0]);
             if ($sentence !== '') {
-                $bullets[] = '- ' . $sentence;
+                $bullets[] = '- '.$sentence;
             }
         }
 
@@ -597,6 +621,7 @@ class SummarizerService
     {
         $bullets = preg_split('/\n/', $this->fallbackBulletize($summary)) ?: [];
         $bullets = array_slice(array_values(array_filter(array_map('trim', $bullets))), 0, 4);
+
         return implode("\n", $bullets);
     }
 
@@ -607,12 +632,12 @@ class SummarizerService
 
         foreach ($sentences as $sentence) {
             if (preg_match('/block|risk|issue|flag|dependency|staging|failing/i', $sentence)) {
-                $prioritized[] = '- ' . trim($sentence);
+                $prioritized[] = '- '.trim($sentence);
             }
         }
 
         if (empty($prioritized) && isset($sentences[0])) {
-            $prioritized[] = '- ' . trim($sentences[0]);
+            $prioritized[] = '- '.trim($sentences[0]);
         }
 
         return implode("\n", $prioritized);
@@ -627,6 +652,7 @@ class SummarizerService
         if (str_starts_with($trimmed, '```') && str_ends_with($trimmed, '```')) {
             return trim(substr($trimmed, strlen('```'), -strlen('```')));
         }
+
         return $trimmed;
     }
 }

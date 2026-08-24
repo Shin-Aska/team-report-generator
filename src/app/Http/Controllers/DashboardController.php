@@ -2,23 +2,27 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use App\Models\Entry;
 use App\Models\GeneratedReport;
 use App\Models\RefinedReport;
 use App\Models\User;
+use App\Services\BusProjectService;
+use App\Services\DevopsWorkItemsService;
 use App\Services\PromptService;
 use App\Services\SummarizerService;
 use App\Services\UserManager;
-use App\Services\DevopsWorkItemsService;
-use App\Services\BusProjectService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
+/**
+ * Coordinate the dashboard and report-generation HTTP workflows.
+ *
+ * Loads entries and status, manages users, selects report ranges, serves cached reports, invokes report services, and serializes AJAX responses. External APIs and model prompting are delegated to services.
+ */
 class DashboardController extends Controller
 {
     public function index(Request $request, DevopsWorkItemsService $ado, BusProjectService $bus)
@@ -81,13 +85,14 @@ class DashboardController extends Controller
     public function storeUser(Request $request, UserManager $users)
     {
         $data = $request->validate([
-            'name' => ['required','string','max:255'],
-            'email' => ['required','email','max:255','unique:users,email'],
-            'password' => ['required','string','min:4'],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:4'],
         ]);
         try {
             // password will be hashed via User::$casts
             $users->create($data, Auth::user());
+
             return back()->with('status', 'User added.');
         } catch (AuthorizationException $e) {
             return back()->withErrors(['user' => $e->getMessage()]);
@@ -98,6 +103,7 @@ class DashboardController extends Controller
     {
         try {
             $users->delete($user, Auth::user());
+
             return back()->with('status', 'User removed.');
         } catch (AuthorizationException $e) {
             return back()->withErrors(['user' => $e->getMessage()]);
@@ -107,13 +113,14 @@ class DashboardController extends Controller
     public function updateUser(Request $request, User $user, UserManager $users)
     {
         $data = $request->validate([
-            'name' => ['required','string','max:255'],
-            'email' => ['required','email','max:255', Rule::unique('users','email')->ignore($user->id)],
-            'password' => ['nullable','string','min:4'],
-            'admin' => ['nullable','boolean'],
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => ['nullable', 'string', 'min:4'],
+            'admin' => ['nullable', 'boolean'],
         ]);
         try {
             $users->update($user, $data, Auth::user());
+
             return back()->with('status', 'User updated.');
         } catch (AuthorizationException $e) {
             return back()->withErrors(['user' => $e->getMessage()]);
@@ -123,12 +130,13 @@ class DashboardController extends Controller
     public function fetchEntry(Request $request)
     {
         $data = $request->validate([
-            'user_id' => ['required','integer','exists:users,id'],
-            'date' => ['required','date'],
+            'user_id' => ['required', 'integer', 'exists:users,id'],
+            'date' => ['required', 'date'],
         ]);
         $entry = Entry::where('user_id', $data['user_id'])
             ->whereDate('entry_date', $data['date'])
             ->first();
+
         return response()->json([
             'found' => (bool) $entry,
             'content' => $entry?->content ?? '',
@@ -138,9 +146,9 @@ class DashboardController extends Controller
     public function publishEntry(Request $request)
     {
         $data = $request->validate([
-            'entry_date' => ['required','date'],
-            'content' => ['required','string'],
-            'as_user_id' => ['nullable','integer','exists:users,id'],
+            'entry_date' => ['required', 'date'],
+            'content' => ['required', 'string'],
+            'as_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $authUser = Auth::user();
@@ -150,7 +158,7 @@ class DashboardController extends Controller
             'user_id' => $targetUserId,
             'entry_date' => $data['entry_date'],
         ], [
-            'content' => $data['content']
+            'content' => $data['content'],
         ]);
 
         return redirect()->route('dashboard', ['date' => $data['entry_date']])
@@ -159,6 +167,11 @@ class DashboardController extends Controller
 
     public function standupReport(Request $request, PromptService $prompts, SummarizerService $sum)
     {
+        $headerOptions = $request->validate([
+            'include_header' => ['nullable', 'boolean'],
+            'header_team' => ['nullable', 'string', 'max:100'],
+            'header_date' => ['nullable', 'date'],
+        ]);
         // Base date comes from query or defaults to today
         $base = Carbon::parse($request->query('date', Carbon::now()->toDateString()));
         $iso = $base->isoWeekday(); // 1=Mon ... 7=Sun
@@ -167,12 +180,11 @@ class DashboardController extends Controller
         $dates = [];
         if ($iso === 1) { // Monday -> previous Friday
             $dates = [$base->copy()->subDays(3)->toDateString()];
-        }
-        else if ($iso === 2) { // Tuesday -> Monday and last Friday
+        } elseif ($iso === 2) { // Tuesday -> Monday and last Friday
             $monday = $base->copy()->subDay()->toDateString();
             $lastFriday = $base->copy()->startOfWeek(Carbon::MONDAY)->subDays(3)->toDateString();
             $dates = [$monday, $lastFriday];
-        } else if ($iso === 4) { // Thursday -> Wednesday and Tuesday
+        } elseif ($iso === 4) { // Thursday -> Wednesday and Tuesday
             $wednesday = $base->copy()->subDay()->toDateString();
             $tuesday = $base->copy()->subDays(2)->toDateString();
             $dates = [$wednesday, $tuesday];
@@ -190,7 +202,7 @@ class DashboardController extends Controller
         $entries = $query
             ->orderBy('entry_date')
             ->get()
-            ->map(fn($e) => [
+            ->map(fn ($e) => [
                 'date' => $e->entry_date->toDateString(),
                 'user' => $e->user?->name ?? 'Unknown',
                 'content' => $e->content,
@@ -199,9 +211,9 @@ class DashboardController extends Controller
         // Keep the original requested/base date for labeling
         $date = $base->toDateString();
         $engine = $request->query('engine');
-        $signature = hash('sha256', json_encode($entries) . $date . ($engine ?? ''));
+        $signature = hash('sha256', json_encode($entries).$date.($engine ?? ''));
 
-        if (!$request->boolean('regenerate')) {
+        if (! $request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'daily')
                 ->where('date', $date)
@@ -212,7 +224,8 @@ class DashboardController extends Controller
 
             if ($cached) {
                 $stale = $cached->signature !== $signature;
-                $html = Str::markdown($cached->content);
+                $markdown = $this->addStandupHeader($cached->content, $headerOptions);
+                $html = Str::markdown($markdown);
                 $engineLabel = $this->determineAvailableEngines()[$cached->engine] ?? 'Default';
                 $savedRefinements = $this->serializeAllRefinements($cached, $stale);
                 if ($request->ajax() || $request->wantsJson()) {
@@ -220,14 +233,15 @@ class DashboardController extends Controller
                         'title' => 'Standup Report',
                         'date' => $date,
                         'html' => $html,
-                        'markdown' => $cached->content,
+                        'markdown' => $markdown,
                         'reportId' => $cached->id,
                         'savedRefinements' => $savedRefinements,
                         'stale' => $stale,
                         'engineLabel' => $engineLabel,
                     ]);
                 }
-                return view('reports.daily', ['html' => $html, 'markdown' => $cached->content, 'date' => $date, 'stale' => $stale]);
+
+                return view('reports.daily', ['html' => $html, 'markdown' => $markdown, 'date' => $date, 'stale' => $stale]);
             }
         }
 
@@ -239,9 +253,9 @@ class DashboardController extends Controller
             Auth::user()?->name,
             $engine
         );
-        $markdown = $result['content'];
+        $storedMarkdown = $result['content'];
 
-        if (!$result['isFallback']) {
+        if (! $result['isFallback']) {
             GeneratedReport::updateOrCreate(
                 [
                     'user_id' => Auth::id(),
@@ -249,13 +263,14 @@ class DashboardController extends Controller
                     'date' => $date,
                     'engine' => $engine,
                 ],
-                ['content' => $markdown, 'signature' => $signature]
+                ['content' => $storedMarkdown, 'signature' => $signature]
             );
         }
 
+        $markdown = $this->addStandupHeader($storedMarkdown, $headerOptions);
         $html = Str::markdown($markdown);
         $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
-        $savedReport = !$result['isFallback']
+        $savedReport = ! $result['isFallback']
             ? GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'daily')
                 ->where('date', $date)
@@ -276,7 +291,24 @@ class DashboardController extends Controller
                 'engineLabel' => $engineLabel,
             ]);
         }
+
         return view('reports.daily', compact('html', 'markdown', 'date'));
+    }
+
+    /**
+     * Add an optional copy-ready greeting without asking the LLM to reproduce it.
+     */
+    private function addStandupHeader(string $markdown, array $options): string
+    {
+        if (! filter_var($options['include_header'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            return $markdown;
+        }
+
+        $team = trim((string) ($options['header_team'] ?? '')) ?: 'Team';
+        $headerDate = Carbon::parse($options['header_date'] ?? Carbon::now()->toDateString());
+        $header = "Good day, daily standup updates for {$team}\n".$headerDate->format('F j, Y');
+
+        return $header."\n\n".ltrim($markdown);
     }
 
     public function weeklyReport(Request $request, PromptService $prompts, SummarizerService $sum)
@@ -288,7 +320,7 @@ class DashboardController extends Controller
             ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('entry_date')
             ->get()
-            ->map(fn($e) => [
+            ->map(fn ($e) => [
                 'date' => $e->entry_date->toDateString(),
                 'user' => $e->user?->name ?? 'Unknown',
                 'content' => $e->content,
@@ -296,9 +328,9 @@ class DashboardController extends Controller
 
         $range = $start->toFormattedDateString().' - '.$end->toFormattedDateString();
         $engine = $request->query('engine');
-        $signature = hash('sha256', json_encode($entries) . $start->toDateString() . $end->toDateString() . ($engine ?? ''));
+        $signature = hash('sha256', json_encode($entries).$start->toDateString().$end->toDateString().($engine ?? ''));
 
-        if (!$request->boolean('regenerate')) {
+        if (! $request->boolean('regenerate')) {
             $cached = GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'weekly')
                 ->where('start_date', $start->toDateString())
@@ -326,6 +358,7 @@ class DashboardController extends Controller
                         'engineLabel' => $engineLabel,
                     ]);
                 }
+
                 return view('reports.weekly', [
                     'html' => $html,
                     'markdown' => $cached->content,
@@ -344,7 +377,7 @@ class DashboardController extends Controller
         );
         $markdown = $result['content'];
 
-        if (!$result['isFallback']) {
+        if (! $result['isFallback']) {
             GeneratedReport::updateOrCreate(
                 [
                     'user_id' => Auth::id(),
@@ -359,7 +392,7 @@ class DashboardController extends Controller
 
         $html = Str::markdown($markdown);
         $engineLabel = $this->determineAvailableEngines()[$engine] ?? 'Default';
-        $savedReport = !$result['isFallback']
+        $savedReport = ! $result['isFallback']
             ? GeneratedReport::where('user_id', Auth::id())
                 ->where('report_type', 'weekly')
                 ->where('start_date', $start->toDateString())
@@ -382,6 +415,7 @@ class DashboardController extends Controller
                 'engineLabel' => $engineLabel,
             ]);
         }
+
         return view('reports.weekly', compact('html', 'markdown', 'start', 'end'));
     }
 
@@ -446,6 +480,7 @@ class DashboardController extends Controller
         if (env('MISTRAL_API_KEY')) {
             $engines['mistral'] = 'Mistral';
         }
+
         return $engines;
     }
 
@@ -454,11 +489,12 @@ class DashboardController extends Controller
         $date = $request->query('date', Carbon::now()->toDateString());
         $entries = Entry::with('user')
             ->whereDate('entry_date', $date)
-            ->orderBy(User::select('name')->whereColumn('users.id','entries.user_id'))
+            ->orderBy(User::select('name')->whereColumn('users.id', 'entries.user_id'))
             ->get();
 
         if ($request->ajax() || $request->wantsJson()) {
-            $html = view('statuses.partials.date', compact('entries','date'))->render();
+            $html = view('statuses.partials.date', compact('entries', 'date'))->render();
+
             return response()->json([
                 'title' => 'Statuses',
                 'date' => $date,
@@ -466,7 +502,7 @@ class DashboardController extends Controller
             ]);
         }
 
-        return view('statuses.date', compact('entries','date'));
+        return view('statuses.date', compact('entries', 'date'));
     }
 
     public function statusesByRange(Request $request)
@@ -477,9 +513,9 @@ class DashboardController extends Controller
         $entries = Entry::with('user')
             ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
             ->orderBy('entry_date')
-            ->orderBy(User::select('name')->whereColumn('users.id','entries.user_id'))
+            ->orderBy(User::select('name')->whereColumn('users.id', 'entries.user_id'))
             ->get()
-            ->groupBy(fn($e) => $e->entry_date->toDateString());
+            ->groupBy(fn ($e) => $e->entry_date->toDateString());
 
         if ($request->ajax() || $request->wantsJson()) {
             $html = view('statuses.partials.range', [
@@ -487,6 +523,7 @@ class DashboardController extends Controller
                 'start' => $start,
                 'end' => $end,
             ])->render();
+
             return response()->json([
                 'title' => 'Statuses',
                 'start' => $start->toDateString(),
@@ -509,6 +546,7 @@ class DashboardController extends Controller
             ->get()
             ->map(function ($refinement) use ($report, $baseReportIsStale) {
                 $isStale = $baseReportIsStale || (($report->signature ?? '') !== ($refinement->source_signature ?? ''));
+
                 return $this->serializeRefinement($refinement, $isStale);
             })
             ->values()

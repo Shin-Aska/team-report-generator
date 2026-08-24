@@ -3,7 +3,7 @@
 ## 1. Project setup
 
 1. **Install prerequisites**
-   - PHP 8.2+
+   - PHP 8.5+
    - Composer
    - Node.js & npm
    - A database engine supported by Laravel (e.g., MySQL/MariaDB, SQLite)

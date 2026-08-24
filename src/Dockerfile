@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-ARG PHP_VERSION=8.3
+ARG PHP_VERSION=8.5
 
 # Composer stage: install PHP dependencies with the same PHP version as runtime
 FROM php:${PHP_VERSION}-cli AS vendor

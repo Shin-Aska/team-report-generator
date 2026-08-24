@@ -2,19 +2,24 @@
 
 namespace App\Services;
 
+/**
+ * Query Azure DevOps and aggregate ticket counts by area and state.
+ *
+ * Builds WIQL queries, batches work-item details, filters configured states, and returns structured data that lets reports degrade gracefully on API errors.
+ */
 class DevopsWorkItemsService
 {
     public function getSummary(): array
     {
         $cfg = config('services.azure_devops', []);
-        $org = (string)($cfg['organization_url'] ?? env('ORGANIZATION_URL', ''));
-        $pat = (string)($cfg['pat'] ?? env('PERSONAL_ACCESS_TOKEN', ''));
+        $org = (string) ($cfg['organization_url'] ?? env('ORGANIZATION_URL', ''));
+        $pat = (string) ($cfg['pat'] ?? env('PERSONAL_ACCESS_TOKEN', ''));
         $project = $cfg['project'] ?? env('ADO_PROJECT');
-        $apiVersion = (string)($cfg['api_version'] ?? env('ADO_API_VERSION', '7.0'));
+        $apiVersion = (string) ($cfg['api_version'] ?? env('ADO_API_VERSION', '7.0'));
 
         $areaPaths = $this->parseCsv($cfg['area_paths'] ?? env('ADO_AREA_PATHS'), ['iPMC\\Workflow and AI']);
-        $workItemTypes = $this->parseCsv($cfg['work_item_types'] ?? env('ADO_WORK_ITEM_TYPES'), ['User Story','Bug','Improvement']);
-        $statusBlacklist = $this->parseCsv($cfg['status_blacklist'] ?? env('ADO_STATUS_BLACKLIST'), ['Closed','Closed but not fixed','New','On Hold','Pending','Deferred']);
+        $workItemTypes = $this->parseCsv($cfg['work_item_types'] ?? env('ADO_WORK_ITEM_TYPES'), ['User Story', 'Bug', 'Improvement']);
+        $statusBlacklist = $this->parseCsv($cfg['status_blacklist'] ?? env('ADO_STATUS_BLACKLIST'), ['Closed', 'Closed but not fixed', 'New', 'On Hold', 'Pending', 'Deferred']);
 
         if ($org === '' || $pat === '') {
             return [
@@ -22,7 +27,7 @@ class DevopsWorkItemsService
                 'organization_url' => $org,
                 'project' => $project,
                 'area_paths' => $areaPaths,
-                'error' => 'Azure DevOps not configured. Set ORGANIZATION_URL and PERSONAL_ACCESS_TOKEN.'
+                'error' => 'Azure DevOps not configured. Set ORGANIZATION_URL and PERSONAL_ACCESS_TOKEN.',
             ];
         }
 
@@ -30,7 +35,7 @@ class DevopsWorkItemsService
             $counts = $this->fetchFilteredCountsByStatePerArea(
                 organizationUrl: $org,
                 personalAccessToken: $pat,
-                project: ($project !== null && $project !== '') ? (string)$project : null,
+                project: ($project !== null && $project !== '') ? (string) $project : null,
                 apiVersion: $apiVersion,
                 areaPaths: $areaPaths,
                 workItemTypes: $workItemTypes,
@@ -75,10 +80,11 @@ class DevopsWorkItemsService
 
             $wiqlResult = $this->adoRequest($personalAccessToken, 'POST', $wiqlUrl, $wiqlBody);
             $workItemsRef = $wiqlResult['workItems'] ?? [];
-            $ids = array_values(array_filter(array_map(static fn($w) => $w['id'] ?? null, $workItemsRef), static fn($v) => $v !== null));
+            $ids = array_values(array_filter(array_map(static fn ($w) => $w['id'] ?? null, $workItemsRef), static fn ($v) => $v !== null));
 
             if (empty($ids)) {
                 $all[$areaPath] = [];
+
                 continue;
             }
 
@@ -88,7 +94,7 @@ class DevopsWorkItemsService
                 $chunk = array_slice($ids, $i, $chunkSize);
                 $batchBody = [
                     'ids' => $chunk,
-                    'fields' => ['System.State']
+                    'fields' => ['System.State'],
                 ];
                 $batchResult = $this->adoRequest($personalAccessToken, 'POST', $batchUrl, $batchBody);
                 foreach (($batchResult['value'] ?? []) as $wi) {
@@ -118,33 +124,37 @@ class DevopsWorkItemsService
         foreach ($raw as $area => $counts) {
             $filtered[$area] = array_filter(
                 $counts,
-                static fn($count, $state) => !in_array($state, $statusBlacklist, true),
+                static fn ($count, $state) => ! in_array($state, $statusBlacklist, true),
                 ARRAY_FILTER_USE_BOTH
             );
         }
+
         return $filtered;
     }
 
     private function buildWiqlUrl(string $organizationUrl, ?string $project, string $apiVersion): string
     {
-        $pathPrefix = $project ? ('/' . rawurlencode($project)) : '';
-        return rtrim($organizationUrl, '/') . $pathPrefix . '/_apis/wit/wiql?api-version=' . rawurlencode($apiVersion);
+        $pathPrefix = $project ? ('/'.rawurlencode($project)) : '';
+
+        return rtrim($organizationUrl, '/').$pathPrefix.'/_apis/wit/wiql?api-version='.rawurlencode($apiVersion);
     }
 
     private function buildBatchUrl(string $organizationUrl, ?string $project, string $apiVersion): string
     {
-        $pathPrefix = $project ? ('/' . rawurlencode($project)) : '';
-        return rtrim($organizationUrl, '/') . $pathPrefix . '/_apis/wit/workitemsbatch?api-version=' . rawurlencode($apiVersion);
+        $pathPrefix = $project ? ('/'.rawurlencode($project)) : '';
+
+        return rtrim($organizationUrl, '/').$pathPrefix.'/_apis/wit/workitemsbatch?api-version='.rawurlencode($apiVersion);
     }
 
     private function buildWiql(array $workItemTypes, string $areaPath): string
     {
         $escapedTypes = array_map(static function ($t) {
-            return "'" . str_replace("'", "''", $t) . "'";
+            return "'".str_replace("'", "''", $t)."'";
         }, $workItemTypes);
         $typesClause = implode(', ', $escapedTypes);
         // Escape quotes and backslashes for WIQL string literal
-        $escapedArea = str_replace(["\\", "'"], ["\\\\", "''"], $areaPath);
+        $escapedArea = str_replace(['\\', "'"], ['\\\\', "''"], $areaPath);
+
         return "SELECT [System.Id] FROM WorkItems WHERE [System.WorkItemType] IN ($typesClause) AND [System.AreaPath] = '$escapedArea'";
     }
 
@@ -152,14 +162,15 @@ class DevopsWorkItemsService
     {
         $counts = [];
         foreach ($states as $state) {
-            if (!isset($counts[$state])) {
+            if (! isset($counts[$state])) {
                 $counts[$state] = 0;
             }
             $counts[$state]++;
         }
-        if (!empty($counts)) {
+        if (! empty($counts)) {
             ksort($counts, SORT_NATURAL | SORT_FLAG_CASE);
         }
+
         return $counts;
     }
 
@@ -171,9 +182,9 @@ class DevopsWorkItemsService
         array $headers = []
     ): array {
         $ch = curl_init();
-        $auth = base64_encode(':' . $personalAccessToken);
+        $auth = base64_encode(':'.$personalAccessToken);
         $defaultHeaders = [
-            'Authorization: Basic ' . $auth,
+            'Authorization: Basic '.$auth,
             'Accept: application/json',
         ];
         $json = null;
@@ -199,30 +210,32 @@ class DevopsWorkItemsService
         if ($response === false) {
             $err = curl_error($ch);
             curl_close($ch);
-            throw new \RuntimeException('cURL error: ' . $err);
+            throw new \RuntimeException('cURL error: '.$err);
         }
         curl_close($ch);
         if ($httpCode >= 400) {
             throw new \RuntimeException("HTTP {$httpCode}: {$response}");
         }
         $decoded = json_decode($response, true);
-        if (!is_array($decoded)) {
+        if (! is_array($decoded)) {
             throw new \RuntimeException('Invalid JSON response');
         }
+
         return $decoded;
     }
 
     private function parseCsv($value, array $default): array
     {
         if (is_array($value)) {
-            return array_values(array_filter(array_map('trim', $value), fn($s) => $s !== ''));
+            return array_values(array_filter(array_map('trim', $value), fn ($s) => $s !== ''));
         }
         $s = is_string($value) ? trim($value) : '';
         if ($s === '') {
             return $default;
         }
         $parts = array_map('trim', explode(',', $s));
-        $parts = array_values(array_filter($parts, fn($x) => $x !== ''));
+        $parts = array_values(array_filter($parts, fn ($x) => $x !== ''));
+
         return $parts ?: $default;
     }
 }
