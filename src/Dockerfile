@@ -54,7 +54,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
      exif \
      pcntl \
      bcmath \
-     opcache \
      zip \
      xml \
      fileinfo
