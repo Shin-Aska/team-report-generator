@@ -30,7 +30,7 @@ class SummarizerServiceTest extends TestCase
         $this->assertNull($result['error']);
         $this->assertStringContainsString('# Summary', $result['content']);
         $this->assertStringContainsString('# Briefdown', $result['content']);
-        $this->assertSame('high', $service->calls[0]['reasoningEffort']);
+        $this->assertSame('low', $service->calls[0]['reasoningEffort']);
         $this->assertSame(16384, $service->calls[0]['maxCompletionTokens']);
         $this->assertSame('low', $service->calls[1]['reasoningEffort']);
         $this->assertSame(8192, $service->calls[1]['maxCompletionTokens']);
@@ -88,6 +88,44 @@ class SummarizerServiceTest extends TestCase
         Http::assertSent(fn (Request $request) => $request['model'] === 'gpt-5-nano-test'
             && $request['reasoning_effort'] === 'low'
             && $request['max_completion_tokens'] === 8192);
+    }
+
+    public function test_azure_retries_token_exhaustion_with_low_reasoning(): void
+    {
+        Env::getRepository()->set('AZURE_ENDPOINT', 'https://example.test/openai/v1/chat/completions');
+        Env::getRepository()->set('AZURE_API_KEY', 'test-key');
+        Env::getRepository()->set('AZURE_AI_MODEL', 'gpt-5-nano-test');
+
+        Http::fakeSequence('https://example.test/*')
+            ->push([
+                'choices' => [[
+                    'finish_reason' => 'length',
+                    'message' => ['content' => null],
+                ]],
+                'usage' => [
+                    'completion_tokens' => 16384,
+                    'completion_tokens_details' => ['reasoning_tokens' => 16384],
+                ],
+            ])
+            ->push([
+                'choices' => [[
+                    'finish_reason' => 'stop',
+                    'message' => ['content' => 'Complete structured report'],
+                ]],
+                'usage' => [
+                    'completion_tokens' => 1200,
+                    'completion_tokens_details' => ['reasoning_tokens' => 800],
+                ],
+            ]);
+
+        $error = null;
+        $result = (new AzureSummarizerProbe)->callAzure('Summarize this report.', $error, 'high', 16384);
+
+        $this->assertSame('Complete structured report', $result);
+        $this->assertNull($error);
+        Http::assertSentCount(2);
+        $efforts = Http::recorded()->map(fn (array $pair) => $pair[0]['reasoning_effort'])->all();
+        $this->assertSame(['high', 'low'], $efforts);
     }
 
     /**

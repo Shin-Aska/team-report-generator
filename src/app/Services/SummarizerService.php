@@ -74,7 +74,7 @@ class SummarizerService
         }
         $preferredEngines = $this->resolveEnginePreference($engine);
         $lastError = null;
-        $first = $this->callWithPreferredEngines($preferredEngines, $prompt1, $lastError);
+        $first = $this->callWithPreferredEngines($preferredEngines, $prompt1, $lastError, 'low', 16384);
         if (! $first) {
             return [
                 'content' => $this->fallbackDaily($entries, $date),
@@ -411,36 +411,47 @@ class SummarizerService
             return null;
         }
 
-        try {
-            $resp = Http::withToken($token)
-                ->timeout($this->llmTimeoutSeconds())
-                ->asJson()
-                ->post($endpoint, [
-                    'messages' => [
-                        ['role' => 'user', 'content' => $text],
-                    ],
-                    'max_completion_tokens' => $maxCompletionTokens,
-                    'reasoning_effort' => $reasoningEffort,
-                    'model' => env('AZURE_AI_MODEL', env('AZURE_MODEL', 'gpt-5-nano')),
-                ]);
+        $efforts = array_values(array_unique([$reasoningEffort, 'low']));
+        foreach ($efforts as $effort) {
+            try {
+                $resp = Http::withToken($token)
+                    ->timeout($this->llmTimeoutSeconds())
+                    ->asJson()
+                    ->post($endpoint, [
+                        'messages' => [
+                            ['role' => 'user', 'content' => $text],
+                        ],
+                        'max_completion_tokens' => $maxCompletionTokens,
+                        'reasoning_effort' => $effort,
+                        'model' => env('AZURE_AI_MODEL', env('AZURE_MODEL', 'gpt-5-nano')),
+                    ]);
 
-            if ($resp->successful()) {
+                if (! $resp->successful()) {
+                    $lastError = 'Azure: HTTP '.$resp->status().'.';
+
+                    return null;
+                }
+
                 $content = $resp->json('choices.0.message.content');
                 $finishReason = (string) ($resp->json('choices.0.finish_reason') ?? 'unknown');
                 $reasoningTokens = (int) ($resp->json('usage.completion_tokens_details.reasoning_tokens') ?? 0);
                 $completionTokens = (int) ($resp->json('usage.completion_tokens') ?? 0);
 
                 if ($finishReason !== 'length' && is_string($content) && trim($content) !== '') {
+                    $lastError = null;
+
                     return $content;
                 }
 
                 $lastError = "Azure: unusable completion (finish_reason={$finishReason}, reasoning_tokens={$reasoningTokens}, completion_tokens={$completionTokens}).";
+                if ($finishReason !== 'length') {
+                    return null;
+                }
+            } catch (\Throwable $e) {
+                $lastError = 'Azure: '.$e->getMessage();
 
                 return null;
             }
-            $lastError = 'Azure: HTTP '.$resp->status().'.';
-        } catch (\Throwable $e) {
-            $lastError = 'Azure: '.$e->getMessage();
         }
 
         return null;
