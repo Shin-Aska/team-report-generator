@@ -102,16 +102,29 @@ class SummarizerService
         }
         // Step 2
         $prompt2 = str_replace('{concatenated_report_here}', $first, $daily2Template);
-        $second = $this->callWithPreferredEngines($preferredEngines, $prompt2, $lastError);
+        // This stage is a straightforward rewrite, so avoid spending the entire
+        // completion budget on hidden reasoning before any prose is emitted.
+        $second = $this->callWithPreferredEngines($preferredEngines, $prompt2, $lastError, 'low', 8192);
 
-        // Combine $first and $second where it is formatted where $first is the Summary and $second is the Briefdown
+        if (! $second) {
+            $output = "# Summary\n\n";
+            $output .= 'Spoken summary generation was unavailable. See the structured Briefdown below.';
+            $output .= "\n\n---\n\n# Briefdown\n\n".$first;
+            $output .= "\n\n---\n\n## Tickets\n\n".$ticketsTable;
+
+            return [
+                'content' => $output,
+                'isFallback' => true,
+                'error' => $lastError ?? 'All LLM engines failed for step 2.',
+            ];
+        }
+
+        // Combine the spoken summary with the structured Briefdown.
         $output = "# Summary\n\n";
         $output .= $second;
-        if ($second) {
-            $output .= "\n\n---\n\n";
-            $output .= "# Briefdown\n\n";
-            $output .= $first;
-        }
+        $output .= "\n\n---\n\n";
+        $output .= "# Briefdown\n\n";
+        $output .= $first;
         // Append tickets table at the end
         $output .= "\n\n---\n\n## Tickets\n\n".$ticketsTable;
 
@@ -226,12 +239,17 @@ class SummarizerService
      * Preserves the first error so the user sees the failure from their chosen engine,
      * not the last fallback in the chain.
      */
-    protected function callWithPreferredEngines(array $preferredEngines, string $text, ?string &$lastError = null): ?string
-    {
+    protected function callWithPreferredEngines(
+        array $preferredEngines,
+        string $text,
+        ?string &$lastError = null,
+        string $reasoningEffort = 'high',
+        int $maxCompletionTokens = 16384,
+    ): ?string {
         foreach ($preferredEngines as $engine) {
             $engineError = null;
             $result = match ($engine) {
-                'azure' => $this->callAzureFoundryAIText($text, $engineError),
+                'azure' => $this->callAzureFoundryAIText($text, $engineError, $reasoningEffort, $maxCompletionTokens),
                 'openai' => $this->callOpenAIText($text, $engineError),
                 'gemini' => $this->callGeminiText($text, $engineError),
                 'mistral' => $this->callMistralText($text, $engineError),
@@ -379,8 +397,12 @@ class SummarizerService
         return null;
     }
 
-    protected function callAzureFoundryAIText(string $text, ?string &$lastError = null): ?string
-    {
+    protected function callAzureFoundryAIText(
+        string $text,
+        ?string &$lastError = null,
+        string $reasoningEffort = 'high',
+        int $maxCompletionTokens = 16384,
+    ): ?string {
         $endpoint = env('AZURE_ENDPOINT');
         $token = env('AZURE_API_KEY');
         if (! $endpoint || ! $token) {
@@ -397,16 +419,24 @@ class SummarizerService
                     'messages' => [
                         ['role' => 'user', 'content' => $text],
                     ],
-                    'max_completion_tokens' => 16384,
-                    'reasoning_effort' => 'high',
-                    'model' => env('AZURE_MODEL', 'gpt-5-nano'),
+                    'max_completion_tokens' => $maxCompletionTokens,
+                    'reasoning_effort' => $reasoningEffort,
+                    'model' => env('AZURE_AI_MODEL', env('AZURE_MODEL', 'gpt-5-nano')),
                 ]);
 
             if ($resp->successful()) {
                 $content = $resp->json('choices.0.message.content');
-                if (is_string($content)) {
+                $finishReason = (string) ($resp->json('choices.0.finish_reason') ?? 'unknown');
+                $reasoningTokens = (int) ($resp->json('usage.completion_tokens_details.reasoning_tokens') ?? 0);
+                $completionTokens = (int) ($resp->json('usage.completion_tokens') ?? 0);
+
+                if ($finishReason !== 'length' && is_string($content) && trim($content) !== '') {
                     return $content;
                 }
+
+                $lastError = "Azure: unusable completion (finish_reason={$finishReason}, reasoning_tokens={$reasoningTokens}, completion_tokens={$completionTokens}).";
+
+                return null;
             }
             $lastError = 'Azure: HTTP '.$resp->status().'.';
         } catch (\Throwable $e) {
