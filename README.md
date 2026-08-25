@@ -185,6 +185,20 @@ podman compose build app web #or docker compose build app web
 podman compose up -d --force-recreate  #or docker compose up -d --force-recreate
 ```
 
+Or use the one-command deploy script (works for both first deploy and redeploys: builds, generates `APP_KEY` if empty, recreates with the current `src/.env`, clears stale Laravel caches, runs migrations, and restarts `web` last so nginx re-resolves the app IP):
+
+```bash
+# Windows (PowerShell)
+.\redeploy.ps1            # build + recreate + migrate
+.\redeploy.ps1 -Seed      # also seed demo data (needed on first deploy)
+.\redeploy.ps1 -SkipBuild # env/config-only change, skip image rebuild
+
+# Linux / macOS / WSL
+sh redeploy.sh            # build + recreate + migrate
+sh redeploy.sh --seed     # also seed demo data (needed on first deploy)
+sh redeploy.sh --skip-build
+```
+
 ## Key features and endpoints
 
 - Dashboard: `GET /dashboard`

@@ -18,7 +18,8 @@ services:
     networks:
       - appnet
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     # Persist Laravel writable directories
     volumes:
       - ./src/storage:/var/www/html/storage:Z
@@ -42,8 +43,10 @@ services:
   scheduler:
     image: team-report-app:latest
     depends_on:
-      - app
-      - db
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
     env_file:
       - ./src/.env
     environment:
@@ -60,8 +63,10 @@ services:
   queue:
     image: team-report-app:latest
     depends_on:
-      - app
-      - db
+      app:
+        condition: service_started
+      db:
+        condition: service_healthy
     env_file:
       - ./src/.env
     environment:
