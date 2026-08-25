@@ -15,7 +15,7 @@ The sections below walk through a typical shared hosting workflow for both Apach
 
 ## Requirements
 
-- **PHP 8.2+** with typical Laravel extensions: `pdo_mysql`, `openssl`, `mbstring`, `tokenizer`, `xml`, `ctype`, `json`, and `fileinfo`.
+- **PHP 8.5+** with typical Laravel extensions: `pdo_mysql`, `openssl`, `mbstring`, `tokenizer`, `xml`, `ctype`, `json`, and `fileinfo`.
 - **Composer 2+** locally (shared hosts rarely allow Composer at runtime).
 - **MySQL 8+** (or MariaDB 10.4+) database credentials from your hosting control panel.
 - Optional: **Node.js 18+** locally if you need to rebuild Vite assets.
@@ -156,7 +156,7 @@ If your host cannot reference directories above the site root, place `public` at
 When you control the full server (or VM/container), you can follow standard Laravel production practices:
 
 1. **Provision the stack**
-   - Install PHP 8.2+ (with OPcache) and required extensions (`pdo_mysql`, `mbstring`, etc.).
+   - Install PHP 8.5+ (with OPcache) and required extensions (`pdo_mysql`, `mbstring`, etc.).
    - Install a web server such as Nginx or Apache. For Nginx, proxy traffic to PHP-FPM; for Apache, enable `mod_proxy_fcgi` or `mod_php`.
    - Install and secure MySQL/MariaDB. Consider managed database services if available.
 
@@ -175,7 +175,7 @@ When you control the full server (or VM/container), you can follow standard Lara
          }
 
          location ~ \.php$ {
-             fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+             fastcgi_pass unix:/run/php/php8.5-fpm.sock;
              include fastcgi_params;
              fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
          }

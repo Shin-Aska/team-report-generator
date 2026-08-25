@@ -106,7 +106,7 @@
       <h5 class="mb-3">Daily Report</h5>
       <div class="row g-3 align-items-end">
         <div class="col-12 col-md-4 d-grid">
-          <button class="btn btn-outline-primary" type="button" onclick="generateDaily()">Generate standup report</button>
+          <button class="btn btn-outline-primary" type="button" onclick="openDailyReportOptions()">Generate standup report</button>
         </div>
       </div>
     </div>
@@ -208,6 +208,37 @@
           <button class="btn btn-outline-secondary" id="copyHtmlBtn" type="button">Copy Formatted</button>
           <button class="btn btn-outline-info" id="regenerateBtn" type="button">Regenerate</button>
           <button class="btn btn-primary" data-bs-dismiss="modal" type="button">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal fade" id="dailyReportOptionsModal" tabindex="-1" aria-labelledby="dailyReportOptionsTitle" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="dailyReportOptionsTitle">Daily report options</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="includeDailyHeader">
+            <label class="form-check-label" for="includeDailyHeader">Add greeting header to the report</label>
+          </div>
+          <div id="dailyHeaderFields">
+            <div class="mb-3">
+              <label class="form-label" for="dailyHeaderTeam">Team</label>
+              <input class="form-control" type="text" id="dailyHeaderTeam" maxlength="100" value="Team" placeholder="Team">
+            </div>
+            <div>
+              <label class="form-label" for="dailyHeaderDate">Header date</label>
+              <input class="form-control" type="date" id="dailyHeaderDate" value="{{ Illuminate\Support\Carbon::now()->toDateString() }}">
+            </div>
+          </div>
+          <div class="form-text mt-3">The optional header will read “Good day, daily standup updates for [Team]” followed by the selected date.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="confirmDailyReportOptions()">Generate report</button>
         </div>
       </div>
     </div>
@@ -510,7 +541,7 @@
 
       <div class="mb-3">
         <div class="fw-semibold mb-2">Reporting</div>
-        <button class="btn btn-primary w-100" type="button" onclick="generateDaily()">Generate Standup Report</button>
+        <button class="btn btn-primary w-100" type="button" onclick="openDailyReportOptions()">Generate Standup Report</button>
       </div>
 
       <div class="fw-semibold mb-2">Generate Team Summary</div>
@@ -693,6 +724,39 @@
     engine: null,
     savedRefinements: [],
   };
+  let dailyReportOptions = { includeHeader: false, team: 'Team', date: @json(\Illuminate\Support\Carbon::now()->toDateString()) };
+
+  function syncDailyHeaderFields(){
+    const enabled = document.getElementById('includeDailyHeader')?.checked === true;
+    const fields = document.getElementById('dailyHeaderFields');
+    if (fields) {
+      fields.querySelectorAll('input').forEach(input => { input.disabled = !enabled; });
+      fields.classList.toggle('opacity-50', !enabled);
+    }
+  }
+
+  function openDailyReportOptions(){
+    const include = document.getElementById('includeDailyHeader');
+    const team = document.getElementById('dailyHeaderTeam');
+    const date = document.getElementById('dailyHeaderDate');
+    if (include) include.checked = dailyReportOptions.includeHeader;
+    if (team) team.value = dailyReportOptions.team;
+    if (date) date.value = dailyReportOptions.date;
+    syncDailyHeaderFields();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('dailyReportOptionsModal')).show();
+  }
+
+  function confirmDailyReportOptions(){
+    dailyReportOptions = {
+      includeHeader: document.getElementById('includeDailyHeader')?.checked === true,
+      team: document.getElementById('dailyHeaderTeam')?.value.trim() || 'Team',
+      date: document.getElementById('dailyHeaderDate')?.value || @json(\Illuminate\Support\Carbon::now()->toDateString()),
+    };
+    bootstrap.Modal.getInstance(document.getElementById('dailyReportOptionsModal'))?.hide();
+    generateDaily();
+  }
+
+  document.getElementById('includeDailyHeader')?.addEventListener('change', syncDailyHeaderFields);
 
   const copyPrevBtn = document.getElementById('copyPreviousUpdateBtn');
   if (copyPrevBtn){
@@ -1075,10 +1139,13 @@
     const engineValue = getSelectedEngine();
     const engine = engineValue ? `&engine=${encodeURIComponent(engineValue)}` : '';
     const regenParam = regenerate ? '&regenerate=1' : '';
+    const headerParams = dailyReportOptions.includeHeader
+      ? `&include_header=1&header_team=${encodeURIComponent(dailyReportOptions.team)}&header_date=${encodeURIComponent(dailyReportOptions.date)}`
+      : '';
     showLoading('Generating daily report…');
     setPendingDaily();
     try {
-      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const res = await fetch(`{{ route('reports.daily') }}?date=${encodeURIComponent(date)}${engine}${regenParam}${headerParams}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
       if (!res.ok) {
         throw new Error(`Server error: ${res.status} ${res.statusText}`);
       }

@@ -4,6 +4,11 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Storage;
 
+/**
+ * Load version-controlled report prompts from local storage.
+ *
+ * Templates live under `storage/app/private/prompts` so model instructions can evolve independently from PHP orchestration.
+ */
 class PromptService
 {
     public function getDaily1Template(): string

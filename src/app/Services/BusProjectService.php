@@ -5,6 +5,11 @@ namespace App\Services;
 use App\Models\BusProject;
 use Illuminate\Support\Carbon;
 
+/**
+ * Manage bus projects and convert them into prompt-ready context.
+ *
+ * Provides both a concise summary and a checklist representation used to classify project status and risk.
+ */
 class BusProjectService
 {
     /**
@@ -13,6 +18,7 @@ class BusProjectService
     public function getForMonth(?Carbon $base = null)
     {
         $base = $base ? $base->copy() : Carbon::now();
+
         return BusProject::query()
             ->orderByDesc('id')
             ->get();
@@ -38,6 +44,7 @@ class BusProjectService
             'project_name' => $name,
             'project_description' => (string) ($description ?? ''),
         ]);
+
         return $project;
     }
 
@@ -58,11 +65,13 @@ class BusProjectService
         if ($list->isEmpty()) {
             return 'No bus projects for this month.';
         }
-        $lines = $list->map(function($p){
+        $lines = $list->map(function ($p) {
             $name = trim($p->project_name ?? '');
             $desc = trim($p->project_description ?? '');
+
             return $desc !== '' ? "- {$name}: {$desc}" : "- {$name}";
         })->all();
+
         return implode("\n", $lines);
     }
 
@@ -74,8 +83,9 @@ class BusProjectService
         }
 
         // Build a checklist-style template for each project
-        $lines = $list->map(function($p){
+        $lines = $list->map(function ($p) {
             $name = trim($p->project_name ?? '');
+
             return "- {$name} - On track, Delayed, Stalled/Blocked (low risk | medium risk | high risk)";
         })->all();
 

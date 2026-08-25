@@ -2,9 +2,14 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Support\ServiceProvider;
 
+/**
+ * Register application-wide container and runtime configuration.
+ *
+ * No custom bindings or boot hooks are currently required; the methods remain explicit extension points.
+ */
 class AppServiceProvider extends ServiceProvider
 {
     /**
